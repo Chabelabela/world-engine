@@ -50,48 +50,37 @@ jobs:
         run: |
           MC=$(cat /tmp/mcjar.txt)
           for c in \
-            net.minecraft.gametest.framework.GameTestHelper \
-            net.minecraft.world.level.storage.SavedDataStorage \
-            net.minecraft.world.level.chunk.status.ChunkStatus \
-            'net.minecraft.world.level.biome.Climate$Sampler' \
+            net.minecraft.world.level.chunk.ProtoChunk \
+            net.minecraft.world.level.chunk.PalettedContainerFactory \
+            net.minecraft.world.level.levelgen.blending.Blender \
+            net.minecraft.tags.WorldPresetTags \
             ; do
             echo "::group::$c"
-            javap -p -cp "$MC" "$c" | grep -v 'lambda\$' || echo "MISSING $c"
+            javap -p -cp "$MC" "$c" | grep -E 'public|static' | grep -v 'lambda\$' || echo "MISSING $c"
             echo "::endgroup::"
           done
           show() { echo "=== $1 | $2"; javap -p -cp "$MC" "$1" 2>&1 | grep -E "$2" || echo "(no match)"; }
-          show net.minecraft.world.phys.Vec3 ' x\(\)|public final double x'
-          show net.minecraft.commands.SharedSuggestionProvider 'static .*suggest\('
-          show net.minecraft.world.level.NaturalSpawner 'spawnMobsForChunkGeneration'
-          show net.minecraft.server.level.ServerLevel 'getNoiseBiome|getUncachedNoiseBiome|getBiome\('
-          show net.minecraft.server.level.WorldGenRegion 'getCenter|getSeed|getMaxY'
-          echo "::group::BiomeSource resolvers (bytecode)"
-          javap -c -p -cp "$MC" net.minecraft.world.level.biome.BiomeSource | sed -n '/createUncachedResolver(/,/^$/p;/createResolverForChunk(/,/^$/p' | head -80
-          echo "::endgroup::"
-          echo "::group::ChunkGenerator.doCreateBiomes / getOrigin (bytecode)"
-          javap -c -p -cp "$MC" net.minecraft.world.level.chunk.ChunkGenerator | sed -n '/doCreateBiomes(/,/^$/p;/createBiomes(/,/^$/p;/getOrigin(/,/^$/p' | head -90
-          echo "::endgroup::"
-          echo "::group::FlatLevelSource.buildTerrain (bytecode)"
-          javap -c -p -cp "$MC" net.minecraft.world.level.levelgen.FlatLevelSource | sed -n '/buildTerrain(/,/^$/p' | head -120
+          show net.minecraft.server.MinecraftServer 'getFixerUpper|DataFixer'
+          show net.minecraft.world.level.chunk.UpgradeData 'EMPTY'
+          echo "::group::SavedDataStorage.readSavedData (bytecode)"
+          javap -c -p -cp "$MC" net.minecraft.world.level.storage.SavedDataStorage | sed -n '/readSavedData(/,/^$/p' | head -80
           echo "::endgroup::"
 
       - name: Apply the draft overlay
         run: |
           cp -rv tools/api-probe/overlay/. . | sed 's#^.*overlay/##'
 
-      - name: Build and unit-test the draft
+      - name: Build, unit-test and GameTest the draft
         working-directory: mod
-        run: ./gradlew build --stacktrace
+        timeout-minutes: 25
+        run: ./gradlew build --continue --stacktrace
 
-      - name: List test tasks
+      - name: Which tasks run the GameTests
         if: always()
         working-directory: mod
-        run: ./gradlew tasks --all | grep -i -E 'gametest|^test' || true
-
-      - name: Run the GameTests
-        working-directory: mod
-        timeout-minutes: 20
-        run: ./gradlew runGameTest --stacktrace
+        run: |
+          ./gradlew build --dry-run | grep -i -E 'gametest|:test|:check' || true
+          ./gradlew test --dry-run | grep -i -E 'gametest' || echo "test does not run the GameTests"
 
       - name: GameTest logs
         if: always()
