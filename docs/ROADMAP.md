@@ -249,17 +249,10 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - [M1a foundations and frames](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md): detailed, with verified code.
 - [M1b handoff spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md): an experiment plan that ends in an ADR.
 - The M1c–M1f plans are written after M1a and the ADR.
-- **Entry tasks carried over from the M0 code review**, to do before `we-frames` or `we-sim` depend on `we-orbit`:
-  - Introduce a `BodyId(u32)` newtype.
-  - Store a body's parent and orbit together (`Option<Link>`).
-  - Make constructors that take saved data return `Result`.
-  - Reduce `t − epoch` by the orbital period for long runs.
-  - Build `we-ffi` as an `rlib` too, for integration tests.
-- **Entry tasks from the M0 final review:**
-  - Degrade gracefully when no native library exists for the platform (e.g. Windows arm64, riscv64). Log a clear error and run without the core instead of crashing the launch.
-  - Make chunk generation call into Rust through a stateless, thread-safe, batched function. Today's `Universe` handle is single-threaded and allocates per call. Worldgen runs on many threads.
-  - Pick the clock source (the universe clock, not overworld game time) and a permission level for debug commands.
-  - Prune old `.worldengine/natives/<hash>` cache directories on startup.
+- **Entry tasks from the M0 reviews:** done in M1a (see `docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md`). Remaining items have new homes:
+  - Thread-safe batched chunk generation is designed into M1c.
+  - The clock source and debug-command permissions move to M3, with `we-sim`.
+  - The period reduction of `t − epoch` was dropped after analysis. It can't beat the precision of an f64 `t`; M3 decides the clock representation.
 - **Spike first (2 weeks, time-boxed):** a fake hand-moved "ship" carries a player between a planet face and a shipyard plot with no loading screen. Record the findings as a design record (`docs/adr/0001-frames-and-handoff.md`).
 - `we-frames`: the cube-sphere projection, face↔block coordinates, the seam adjacency table with rotations, and the handoff transforms. Property tests cover round trips, adjacency consistency and distortion bounds.
 - `we-planet` v0: deterministic terrain height and climate bands as functions on the unit sphere, keyed by seed.

@@ -2352,6 +2352,20 @@ git push
 
 ---
 
+> **Post-review note (2026-11-20):** M1a was executed with subagents. Two quality reviews followed, each with fixes and a re-review. The repository, not this plan, is now the source of truth for these files.
+> - `4c433e6`, `we-frames` hardening:
+>   - No panics on bad input: `of_direction` is a pure match, `to_surface` and `inertial_to_surface` return `Option`, and `fold` returns `None` beyond one face width or for non-finite input.
+>   - Integer cell helpers for seam mirroring: `cell_of` (half-open [0, N)) and `fold_cell`.
+>   - `QuarterTurns` is normalised and yaw is wrapped. `CubeSphere::try_new` added.
+>   - 41 tests in total.
+> - `e73b61d`: grid lines **kink at seams** everywhere except an edge's midpoint (up to about 60° near corners).
+>   - `QuarterTurns` is exact for block facing, yaw and grid velocities.
+>   - Physical velocities must cross through the body frame (`velocity_to_body` on the old face, then `velocity_to_surface` on the new one).
+> - `1ef2e42`, Java hardening:
+>   - Pruning can never disable the mod, and only deletes `[0-9a-f]{16}` folders, never following symlinks or junctions.
+>   - A failing universe creation can't crash server start.
+>   - Load failures are logged with their cause and platform.
+
 ## Self-review against the M1a goals
 
 | Goal | Task |
