@@ -7,7 +7,7 @@ description = "C ABI of the World Engine core, consumed by the Fabric mod via Ja
 
 [lib]
 name = "worldengine_core"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 we-orbit.workspace = true

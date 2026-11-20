@@ -16,7 +16,7 @@
 //! into the JVM.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use we_orbit::CelestialSystem;
+use we_orbit::{BodyId, CelestialSystem};
 
 pub const WE_ABI_VERSION: u32 = 1;
 pub const WE_OK: i32 = 0;
@@ -107,12 +107,10 @@ pub unsafe extern "C" fn we_universe_body_position(
     if out_xyz.is_null() {
         return WE_ERR_NULL;
     }
-    let index = index as usize;
-    if index >= universe.system.len() {
-        return WE_ERR_BAD_INDEX;
-    }
     guard(|| {
-        let p = universe.system.position_at(index, universe.time);
+        let Some(p) = universe.system.position_at(BodyId(index), universe.time) else {
+            return WE_ERR_BAD_INDEX;
+        };
         for (i, v) in [p.x, p.y, p.z].into_iter().enumerate() {
             unsafe { out_xyz.add(i).write_unaligned(v) };
         }
@@ -139,15 +137,14 @@ pub unsafe extern "C" fn we_universe_body_name(
     let Some(universe) = (unsafe { universe.as_ref() }) else {
         return WE_ERR_NULL;
     };
-    let index = index as usize;
-    if index >= universe.system.len() {
+    let Some(body) = universe.system.body(BodyId(index)) else {
         return WE_ERR_BAD_INDEX;
-    }
+    };
     if buf.is_null() && buf_len > 0 {
         return WE_ERR_NULL;
     }
     guard(|| {
-        let name = universe.system.body(index).name.as_bytes();
+        let name = body.name.as_bytes();
         let n = name.len().min(buf_len as usize);
         if n > 0 {
             unsafe { std::ptr::copy_nonoverlapping(name.as_ptr(), buf, n) };
