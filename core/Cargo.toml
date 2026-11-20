@@ -9,6 +9,7 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 glam = "0.34"
+libm = "0.2.16"
 proptest = "1.12"
 we-orbit = { path = "crates/we-orbit" }
 we-frames = { path = "crates/we-frames" }

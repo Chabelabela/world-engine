@@ -82,7 +82,9 @@ impl CubeSphere {
     fn tangents(self, x: f64, z: f64) -> (f64, f64) {
         let a = x / self.half() - 1.0;
         let b = z / self.half() - 1.0;
-        ((a * FRAC_PI_4).tan(), (b * FRAC_PI_4).tan())
+        // libm (pure Rust), not f64::tan: platform maths libraries differ in
+        // the last bit, and terrain must be identical on every OS.
+        (libm::tan(a * FRAC_PI_4), libm::tan(b * FRAC_PI_4))
     }
 
     /// Unit direction (body frame) of grid position (`x`, `z`) on `face`.
@@ -100,8 +102,8 @@ impl CubeSphere {
     pub fn grid_of(self, dir: DVec3) -> (Face, f64, f64) {
         let face = Face::of_direction(dir);
         let along = dir.dot(face.normal());
-        let a = (dir.dot(face.east()) / along).atan() / FRAC_PI_4;
-        let b = (dir.dot(face.south()) / along).atan() / FRAC_PI_4;
+        let a = libm::atan(dir.dot(face.east()) / along) / FRAC_PI_4;
+        let b = libm::atan(dir.dot(face.south()) / along) / FRAC_PI_4;
         (face, (a + 1.0) * self.half(), (b + 1.0) * self.half())
     }
 
@@ -249,6 +251,7 @@ mod tests {
     use std::f64::consts::SQRT_2;
 
     const N: u32 = 16_384;
+    const PROJECTION_GOLDEN: u64 = 0x88c6_ce59_9442_24d1;
 
     fn sphere() -> CubeSphere {
         CubeSphere::new(N)
@@ -498,6 +501,32 @@ mod tests {
         assert_eq!(s.cell_of(point(Face::E0, n, 0.0, n)), (last, last));
         assert_eq!(s.cell_of(point(Face::E0, 1.0, 0.0, 2.999)), (1, 2));
         assert_eq!(s.cell_of(point(Face::E0, n - 1e-9, 0.0, 0.5)), (last, 0));
+    }
+
+    /// FNV-1a over the exact bits of many projections. A failure on one
+    /// platform only means its maths library differs: the projection must
+    /// use `libm` (pure Rust), never `f64::tan` / `f64::atan`.
+    #[test]
+    fn projection_is_bit_identical_on_every_platform() {
+        let s = sphere();
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for face in Face::ALL {
+            for i in 0..32 {
+                for j in 0..32 {
+                    let x = f64::from(i) * 512.0 + 0.5 + f64::from(j) * 0.013;
+                    let z = f64::from(j) * 512.0 + 0.5 + f64::from(i) * 0.029;
+                    let d = s.direction(face, x, z);
+                    let (_, gx, gz) = s.grid_of(d);
+                    for v in [d.x, d.y, d.z, gx, gz] {
+                        for byte in v.to_bits().to_le_bytes() {
+                            hash ^= u64::from(byte);
+                            hash = hash.wrapping_mul(0x0100_0000_01b3);
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(hash, PROJECTION_GOLDEN, "got {hash:#018x}");
     }
 
     #[test]
