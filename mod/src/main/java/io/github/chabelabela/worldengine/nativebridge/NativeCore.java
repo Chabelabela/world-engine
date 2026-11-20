@@ -48,7 +48,12 @@ public final class NativeCore {
 
     /** Load the library at {@code library} for the lifetime of the JVM and check its ABI version. */
     public static NativeCore load(Path library) {
-        SymbolLookup lib = SymbolLookup.libraryLookup(library, Arena.global());
+        SymbolLookup lib;
+        try {
+            lib = SymbolLookup.libraryLookup(library, Arena.global());
+        } catch (IllegalArgumentException e) {
+            throw new NativeCoreException("Could not load the World Engine core from " + library, e);
+        }
         NativeCore core = new NativeCore(lib);
         int abi = core.abiVersion();
         if (abi != EXPECTED_ABI_VERSION) {

@@ -4,9 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class NativeCoreTest {
     /** Set by the Gradle test task to the freshly built library (see build.gradle). */
@@ -57,6 +60,12 @@ class NativeCoreTest {
         try (NativeCore.Universe u = core.newDemoUniverse()) {
             assertThrows(NativeCoreException.class, () -> u.setTime(Double.NaN));
         }
+    }
+
+    @Test
+    void wrapsLoadFailuresInNativeCoreException(@TempDir Path dir) throws IOException {
+        Path notALibrary = Files.writeString(dir.resolve("not-a-library.bin"), "hello");
+        assertThrows(NativeCoreException.class, () -> NativeCore.load(notALibrary));
     }
 
     @Test
