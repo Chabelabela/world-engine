@@ -141,13 +141,20 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
                 int top = Math.min(ColumnMaterials.topY(height, kind), maxY);
                 for (int y = minY; y <= top; y++) {
                     Ground ground = ColumnMaterials.at(y, height, biome, kind);
-                    if (ground == Ground.AIR) {
-                        continue;
+                    if (ground != Ground.AIR) {
+                        chunk.getSection(chunk.getSectionIndex(y))
+                                .setBlockState(dx, y & 15, dz, GroundStates.of(ground), false);
                     }
-                    BlockState state = GroundStates.of(ground);
-                    chunk.getSection(chunk.getSectionIndex(y)).setBlockState(dx, y & 15, dz, state, false);
-                    oceanFloor.update(dx, y, dz, state);
-                    worldSurface.update(dx, y, dz, state);
+                }
+                // A heightmap keeps the highest block that matches it, so only the column's top blocks matter:
+                // the solid surface for the ocean floor, and the water or the surface for the world surface.
+                int surface = Math.min(LevelShape.surfaceY(height), maxY);
+                if (surface >= minY) {
+                    oceanFloor.update(dx, surface, dz,
+                            GroundStates.of(ColumnMaterials.at(surface, height, biome, kind)));
+                }
+                if (top >= minY) {
+                    worldSurface.update(dx, top, dz, GroundStates.of(ColumnMaterials.at(top, height, biome, kind)));
                 }
             }
         }
