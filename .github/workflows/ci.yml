@@ -73,3 +73,24 @@ jobs:
         with:
           name: world-engine-mod
           path: mod/build/libs/*.jar
+
+  mod-tests:
+    name: mod tests (${{ matrix.os }})
+    needs: core
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+        working-directory: mod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Test the mod against this platform's native library
+        run: ./gradlew test
