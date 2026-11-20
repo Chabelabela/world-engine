@@ -14,6 +14,8 @@
 //! Units and axes match the rest of the core: metres, seconds, right-handed,
 //! Y-up. Grid x grows east, grid z grows south (Minecraft's convention).
 
+mod cube_sphere;
 mod face;
 
+pub use cube_sphere::{CubeSphere, Folded, SurfacePoint};
 pub use face::{Edge, Face, QuarterTurns};
