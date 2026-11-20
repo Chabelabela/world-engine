@@ -1,0 +1,12 @@
+[package]
+name = "we-frames"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Cube-sphere planets, face grids, seams and frame transforms for World Engine"
+
+[dependencies]
+glam.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
