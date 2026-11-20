@@ -50,6 +50,8 @@ The vision is the right ambition. These adjustments keep it buildable.
 | Procedural generation in Rust plus GPU compute | **Rust on the CPU first.** Add GPU compute only where profiling shows a need. | Determinism and testability. Dedicated servers usually have no GPU. |
 | Fluid dynamics, heat transfer and energy conservation everywhere | **Targeted models**: atmospheric drag, re-entry heating and structural breakup first, then thermal and power networks. | Full fluid dynamics isn't tractable at game rates. Players feel the targeted effects anyway. |
 | Every planet runs geology, ecosystems and evolution live | Simulate **"pre-history" once at world creation**, then run a slow coarse live simulation, then **catch up** when chunks load. | This delivers "millions of years of evolution" for seconds of compute. |
+| "A sufficiently massive object influences orbital trajectories" | **Patched conics** (one dominant body at a time) through M8. Full N-body arrives in M9, when planetary engines need it. | Stable, deterministic and cheap. It allows time warp, and client and server compute identical results. |
+| "Life could evolve according to environmental conditions" | Ecosystems are **populations that spread and retreat** with climate and player impact (M6). True genetic evolution waits until after 1.0. | Populations deliver the visible effect. Simulating evolution is a research project of its own. |
 | "Forget dimensions. One continuous environment." | **One continuous simulation.** The voxels live in one Minecraft level, and the handoffs between regions of it are invisible. | Truly spherical voxel planets with radial gravity would break almost every vanilla mechanic (mobs, redstone, fluids, structures, player movement). |
 | GPU-driven chunk rendering, virtualized geometry, global illumination | **Deferred to M10**, after the Vulkan switch. | Highest cost and lowest necessity for the North Star. |
 
@@ -267,6 +269,7 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - Frame handoff as designed in the M1 design record, with hysteresis and round-trip conservation tests.
 - Map view and HUD: orbit lines, apoapsis and periapsis, sphere of influence, time to the next event.
 - Persistence: the simulation state is versioned and saved with the world. Ships survive reloads in orbit.
+- Energy conservation: coasting ships use a symplectic integrator, and a test bounds energy drift over 100 simulated orbits.
 
 **Exit:** a crude rocket flown by hand reaches a stable orbit that survives save/reload and time warp. The apoapsis and periapsis readouts match `we-orbit` within 0.1%.
 
@@ -282,8 +285,10 @@ The sizes below are **rough planning ranges for one experienced developer workin
 
 ### M5 — Spacecraft engineering and the Ultimate Test
 **Goal:** Pass the North Star test.
-- Parts: fuel and oxidizer tanks, engines with thrust and specific impulse (Isp) that differ between sea level and vacuum, RCS, decouplers and staging, landing legs, parachutes, heat shield.
-- Atmosphere model: exponential density, drag per exposed face computed from the ship's voxel surface, and re-entry heating per face. Blocks past their heat tolerance are destroyed.
+- Parts: fuel and oxidizer tanks, engines with thrust and specific impulse (Isp) that differ between sea level and vacuum, RCS, decouplers and staging, landing legs, parachutes, heat shield, wings and control surfaces.
+- Atmosphere model: layered per planet, with pressure, temperature and density by altitude. Composition is added in M6.
+- Aerodynamics: drag on every exposed face, computed from the ship's voxel surface, plus lift from wing and control-surface blocks. Planes and spaceplanes fly, not only rockets.
+- Re-entry heating per face. Blocks past their heat tolerance are destroyed.
 - Simple structural failure: each block connection has a strength. An overstressed connection splits the ship into separate bodies.
 - Flight UX: navball, SAS attitude hold, throttle, staging UI, and maneuver nodes (stretch goal).
 - Moon content: regolith and craters, low-gravity movement, vacuum, and a simple oxygen suit.
@@ -302,6 +307,9 @@ The sizes below are **rough planning ranges for one experienced developer workin
 ### M7 — Engineering consequences · *stations and bases*
 - A full structural stress graph, heat transfer with radiators, power networks, and life support (detecting sealed volumes, oxygen and CO₂).
 - Docking and assembling stations in orbit.
+- Planetary bases and colonies need air, water, energy and resources, supplied through the same life-support and power systems.
+- Mining platforms on planets, and on asteroids once M8 adds them.
+- Automated factories come from vanilla redstone and from Create, which the compatibility table expects to work.
 
 **Exit:** a station assembled from several launches keeps its crew alive. Failures in power, heat or air are visible and diagnosable.
 
