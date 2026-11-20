@@ -4,6 +4,7 @@ import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
@@ -20,7 +21,7 @@ import java.nio.file.Path;
  * {@link #EXPECTED_ABI_VERSION} together with {@code WE_ABI_VERSION}.
  */
 public final class NativeCore {
-    public static final int EXPECTED_ABI_VERSION = 1;
+    public static final int EXPECTED_ABI_VERSION = 2;
 
     private final MethodHandle abiVersionFn;
     private final MethodHandle newDemoFn;
@@ -29,6 +30,7 @@ public final class NativeCore {
     private final MethodHandle bodyCountFn;
     private final MethodHandle bodyPositionFn;
     private final MethodHandle bodyNameFn;
+    private final MethodHandle terrainColumnsFn;
 
     private NativeCore(SymbolLookup lib) {
         Linker linker = Linker.nativeLinker();
@@ -44,6 +46,10 @@ public final class NativeCore {
         bodyNameFn = linker.downcallHandle(
                 find(lib, "we_universe_body_name"),
                 FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT));
+        terrainColumnsFn = linker.downcallHandle(
+                find(lib, "we_terrain_columns"),
+                FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT,
+                        JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
     }
 
     /** Load the library at {@code library} for the lifetime of the JVM and check its ABI version. */
@@ -54,13 +60,24 @@ public final class NativeCore {
         } catch (IllegalArgumentException e) {
             throw new NativeCoreException("Could not load the World Engine core from " + library, e);
         }
-        NativeCore core = new NativeCore(lib);
-        int abi = core.abiVersion();
+        // Check the version before looking up anything newer, so a stale library
+        // reports a version mismatch instead of a missing symbol.
+        int abi = readAbiVersion(lib);
         if (abi != EXPECTED_ABI_VERSION) {
             throw new NativeCoreException("World Engine core at " + library + " has ABI v" + abi
                     + ", but this mod needs v" + EXPECTED_ABI_VERSION);
         }
-        return core;
+        return new NativeCore(lib);
+    }
+
+    private static int readAbiVersion(SymbolLookup lib) {
+        MethodHandle abiVersion = Linker.nativeLinker()
+                .downcallHandle(find(lib, "we_abi_version"), FunctionDescriptor.of(JAVA_INT));
+        try {
+            return (int) abiVersion.invokeExact();
+        } catch (Throwable t) {
+            throw wrap(t);
+        }
     }
 
     private static MemorySegment find(SymbolLookup lib, String name) {
@@ -80,6 +97,34 @@ public final class NativeCore {
     public int abiVersion() {
         try {
             return (int) abiVersionFn.invokeExact();
+        } catch (Throwable t) {
+            throw wrap(t);
+        }
+    }
+
+    /**
+     * Terrain for a {@code countX} by {@code countZ} block of columns whose north-west cell is
+     * ({@code x0}, {@code z0}) on {@code face} (0-5, {@code we_frames::Face}) of a planet with
+     * {@code cells} blocks per face edge, generated from {@code seed}.
+     *
+     * <p>Unlike {@link Universe}, this is stateless and thread-safe: world-generation threads may
+     * call it concurrently.
+     */
+    public TerrainColumns terrainColumns(
+            long seed, int cells, PlanetKind kind, int face, int x0, int z0, int countX, int countZ) {
+        try (Arena arena = Arena.ofConfined()) {
+            if (countX < 0 || countZ < 0) {
+                throw new NativeCoreException("Negative region size " + countX + " x " + countZ);
+            }
+            int n = Math.multiplyExact(countX, countZ);
+            MemorySegment heights = arena.allocate(JAVA_INT, Math.max(n, 1));
+            MemorySegment biomes = arena.allocate(JAVA_BYTE, Math.max(n, 1));
+            check((int) terrainColumnsFn.invokeExact(
+                    seed, cells, kind.id(), face, x0, z0, countX, countZ, heights, biomes),
+                    "we_terrain_columns");
+            return new TerrainColumns(countX, countZ,
+                    heights.asSlice(0, (long) n * Integer.BYTES).toArray(JAVA_INT),
+                    biomes.asSlice(0, n).toArray(JAVA_BYTE));
         } catch (Throwable t) {
             throw wrap(t);
         }
