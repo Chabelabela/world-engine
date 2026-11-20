@@ -861,6 +861,8 @@ git add core/
 git commit -m "feat(core): C ABI with panic guard, status codes and demo universe handle"
 ```
 
+> **Post-review note (2026-11-20):** A code review after Task 4 led to commit `972d9bc` ("fix(core): address M0 code review"). It added unaligned-safe writes, a documented threading contract, `WE_ERR_INVALID = -3` for non-finite time, a relative solver tolerance, orbit validation and 14 more tests. From that commit on, the repository, not this plan, is the source of truth for `core/`. The Java `NativeCore` treats any negative status as an error, so it needs no change.
+
 ---
 
 ### Task 5: Fabric mod scaffold

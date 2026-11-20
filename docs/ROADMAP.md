@@ -244,6 +244,12 @@ The sizes below are **rough planning ranges for one experienced developer workin
 
 ### M1 — Spatial engine · *"walk around a planet"*
 **Goal:** Break Minecraft's flat-world assumption.
+- **Entry tasks carried over from the M0 code review**, to do before `we-frames` or `we-sim` depend on `we-orbit`:
+  - Introduce a `BodyId(u32)` newtype.
+  - Store a body's parent and orbit together (`Option<Link>`).
+  - Make constructors that take saved data return `Result`.
+  - Reduce `t − epoch` by the orbital period for long runs.
+  - Build `we-ffi` as an `rlib` too, for integration tests.
 - **Spike first (2 weeks, time-boxed):** a fake hand-moved "ship" carries a player between a planet face and a shipyard plot with no loading screen. Record the findings as a design record (`docs/adr/0001-frames-and-handoff.md`).
 - `we-frames`: the cube-sphere projection, face↔block coordinates, the seam adjacency table with rotations, and the handoff transforms. Property tests cover round trips, adjacency consistency and distortion bounds.
 - `we-planet` v0: deterministic terrain height and climate bands as functions on the unit sphere, keyed by seed.
