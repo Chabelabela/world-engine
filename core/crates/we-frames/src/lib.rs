@@ -16,6 +16,8 @@
 
 mod cube_sphere;
 mod face;
+mod layout;
 
 pub use cube_sphere::{CubeSphere, Folded, SurfacePoint};
 pub use face::{Edge, Face, QuarterTurns};
+pub use layout::PlanetLayout;
