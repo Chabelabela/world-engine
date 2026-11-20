@@ -1,5 +1,6 @@
-# Planning aid: prints the real Minecraft 26.3 API that the next plan depends on,
-# and compiles draft code in tools/api-probe/ against the mod's real classpath.
+# Planning aid: prints the real Minecraft 26.3 API that the next plan depends on, then
+# builds and GameTests draft code from tools/api-probe/overlay/ (copied over the checkout
+# in CI only). Not part of the build. Delete it once the plan it serves is written.
 # Not part of the build. Safe to delete once the plans it serves are written.
 name: mc-api
 
@@ -45,131 +46,56 @@ jobs:
           echo "MC jar: $(cat /tmp/mcjar.txt)"
           test -s /tmp/mcjar.txt
 
-      - name: Signatures (full)
+      - name: More signatures
         run: |
           MC=$(cat /tmp/mcjar.txt)
           for c in \
-            net.minecraft.world.level.chunk.ChunkGenerator \
-            net.minecraft.world.level.biome.BiomeSource \
-            net.minecraft.world.level.biome.BiomeResolver \
-            net.minecraft.world.level.biome.TheEndBiomeSource \
-            net.minecraft.world.level.biome.FixedBiomeSource \
-            net.minecraft.world.level.levelgen.FlatLevelSource \
-            net.minecraft.world.level.levelgen.DebugLevelSource \
-            net.minecraft.world.level.NoiseColumn \
-            net.minecraft.world.level.levelgen.Heightmap \
-            'net.minecraft.world.level.levelgen.Heightmap$Types' \
-            net.minecraft.world.level.saveddata.SavedData \
-            net.minecraft.world.level.saveddata.SavedDataType \
-            net.minecraft.world.level.storage.DimensionDataStorage \
-            net.minecraft.resources.RegistryOps \
-            net.minecraft.world.level.chunk.ChunkGeneratorStructureState \
-            net.minecraft.world.level.levelgen.RandomState \
-            net.minecraft.world.level.levelgen.presets.WorldPreset \
-            net.minecraft.world.level.levelgen.presets.WorldPresets \
-            net.minecraft.world.level.dimension.LevelStem \
-            net.minecraft.world.level.chunk.LevelChunkSection \
-            net.minecraft.world.level.storage.LevelData \
-            'net.minecraft.world.level.storage.LevelData$RespawnData' \
-            net.minecraft.server.permissions.Permissions \
-            net.minecraft.resources.Identifier \
-            net.minecraft.resources.ResourceKey \
-            net.minecraft.world.level.LevelHeightAccessor \
+            net.minecraft.gametest.framework.GameTestHelper \
+            net.minecraft.world.level.storage.SavedDataStorage \
+            net.minecraft.world.level.chunk.status.ChunkStatus \
+            'net.minecraft.world.level.biome.Climate$Sampler' \
             ; do
             echo "::group::$c"
-            javap -p -cp "$MC" "$c" || echo "MISSING $c"
+            javap -p -cp "$MC" "$c" | grep -v 'lambda\$' || echo "MISSING $c"
             echo "::endgroup::"
           done
-
-      - name: Signatures (filtered)
-        run: |
-          MC=$(cat /tmp/mcjar.txt)
           show() { echo "=== $1 | $2"; javap -p -cp "$MC" "$1" 2>&1 | grep -E "$2" || echo "(no match)"; }
-          show net.minecraft.world.level.chunk.ChunkAccess 'getSection|getHeightmap|getOrCreateHeightmap|getPos|getMinY|getMaxY|getHeight|fillBiomes|setBlockState|getMinSection|getSectionIndex|getSections|markPosForPostprocessing'
-          show net.minecraft.server.level.ServerLevel 'getSeed|setRespawnData|setDefaultSpawnPos|getRespawnData|getDataStorage|getChunkSource|getSharedSpawnPos|dimension\(\)|getLevelData'
-          show net.minecraft.server.MinecraftServer 'setInitialSpawn|overworld\(\)|getWorldData|getRespawnData|findRespawnDimension|getLevel\('
-          show net.minecraft.commands.CommandSourceStack 'permissions|hasPermission|getLevel|getPlayer|sendSuccess|sendFailure|getPosition|getServer'
-          show net.minecraft.server.permissions.PermissionSet 'hasPermission|.*'
-          show net.minecraft.core.registries.BuiltInRegistries 'CHUNK_GENERATOR|BIOME_SOURCE'
-          show net.minecraft.core.registries.Registries 'WORLD_PRESET|DIMENSION_TYPE|BIOME|LEVEL_STEM|CHUNK_GENERATOR|BIOME_SOURCE'
-          show net.minecraft.core.Registry 'static .* register'
-          show net.minecraft.world.level.block.Blocks ' (STONE|DIRT|GRASS_BLOCK|SAND|SANDSTONE|GRAVEL|WATER|ICE|SNOW_BLOCK|SNOW|BEDROCK|AIR|COARSE_DIRT|PODZOL|RED_SAND|TERRACOTTA|DEEPSLATE|TUFF|CALCITE|PACKED_ICE|BASALT|BLACKSTONE);'
-          show net.minecraft.world.level.biome.Biomes ' (THE_VOID|PLAINS|FOREST|TAIGA|SNOWY_PLAINS|SNOWY_TAIGA|DESERT|SAVANNA|JUNGLE|SPARSE_JUNGLE|STONY_PEAKS|JAGGED_PEAKS|FROZEN_PEAKS|SNOWY_SLOPES|WINDSWEPT_HILLS|BEACH|SNOWY_BEACH|OCEAN|DEEP_OCEAN|COLD_OCEAN|FROZEN_OCEAN|DEEP_FROZEN_OCEAN|WARM_OCEAN|LUKEWARM_OCEAN|BADLANDS|ICE_SPIKES|STONY_SHORE|MEADOW|DRIPSTONE_CAVES);'
-          show net.minecraft.server.level.ServerPlayer 'teleportTo|teleport\('
-          show net.minecraft.world.entity.Entity ' teleportTo|snapTo|moveTo'
-          show net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator 'spawnOriginalMobs|createBiomes|fillFromNoise|getBaseHeight|createState|applyCarvers|buildSurface'
-          show net.minecraft.world.level.chunk.ChunkGenerator 'createState|createBiomes|applyBiomeDecoration|createStructures'
-          show net.minecraft.world.level.levelgen.WorldOptions 'seed'
-          show net.minecraft.server.level.ServerChunkCache 'randomState|getGenerator|getGeneratorState'
-          show net.minecraft.world.level.chunk.status.ChunkStatus ' (EMPTY|BIOMES|NOISE|SURFACE|CARVERS|FEATURES|FULL);'
-
-      - name: Bytecode of interest
-        run: |
-          MC=$(cat /tmp/mcjar.txt)
-          echo "::group::FlatLevelSource.fillFromNoise"
-          javap -c -p -cp "$MC" net.minecraft.world.level.levelgen.FlatLevelSource | sed -n '/fillFromNoise(/,/^$/p' | head -120
+          show net.minecraft.world.phys.Vec3 ' x\(\)|public final double x'
+          show net.minecraft.commands.SharedSuggestionProvider 'static .*suggest\('
+          show net.minecraft.world.level.NaturalSpawner 'spawnMobsForChunkGeneration'
+          show net.minecraft.server.level.ServerLevel 'getNoiseBiome|getUncachedNoiseBiome|getBiome\('
+          show net.minecraft.server.level.WorldGenRegion 'getCenter|getSeed|getMaxY'
+          echo "::group::BiomeSource resolvers (bytecode)"
+          javap -c -p -cp "$MC" net.minecraft.world.level.biome.BiomeSource | sed -n '/createUncachedResolver(/,/^$/p;/createResolverForChunk(/,/^$/p' | head -80
           echo "::endgroup::"
-          echo "::group::TheEndBiomeSource static init + codec"
-          javap -c -p -cp "$MC" net.minecraft.world.level.biome.TheEndBiomeSource | sed -n '/static {}/,/^$/p' | head -60
-          javap -c -p -cp "$MC" net.minecraft.world.level.biome.TheEndBiomeSource | grep -n 'lambda\$static' | head
+          echo "::group::ChunkGenerator.doCreateBiomes / getOrigin (bytecode)"
+          javap -c -p -cp "$MC" net.minecraft.world.level.chunk.ChunkGenerator | sed -n '/doCreateBiomes(/,/^$/p;/createBiomes(/,/^$/p;/getOrigin(/,/^$/p' | head -90
           echo "::endgroup::"
-          echo "::group::MinecraftServer.setInitialSpawn"
-          javap -c -p -cp "$MC" net.minecraft.server.MinecraftServer | sed -n '/setInitialSpawn(/,/^$/p' | head -150
-          echo "::endgroup::"
-          echo "::group::NoiseBasedChunkGenerator.spawnOriginalMobs"
-          javap -c -p -cp "$MC" net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator | sed -n '/spawnOriginalMobs(/,/^$/p' | head -60
-          echo "::endgroup::"
-          echo "::group::ChunkGenerator.createState"
-          javap -c -p -cp "$MC" net.minecraft.world.level.chunk.ChunkGenerator | sed -n '/createState(/,/^$/p' | head -40
-          echo "::endgroup::"
-          echo "::group::ChunkMap constructor calls createState / randomState"
-          javap -c -p -cp "$MC" net.minecraft.server.level.ChunkMap | grep -n -E 'createState|RandomState.create|ensureStructuresGenerated|NoiseGeneratorSettings.dummy' | head
-          echo "::endgroup::"
-          echo "::group::DebugLevelSource (smallest generator)"
-          javap -c -p -cp "$MC" net.minecraft.world.level.levelgen.DebugLevelSource | sed -n '/static {}/,/^$/p' | head -40
+          echo "::group::FlatLevelSource.buildTerrain (bytecode)"
+          javap -c -p -cp "$MC" net.minecraft.world.level.levelgen.FlatLevelSource | sed -n '/buildTerrain(/,/^$/p' | head -120
           echo "::endgroup::"
 
-      - name: Vanilla data JSON
+      - name: Apply the draft overlay
         run: |
-          MC=$(cat /tmp/mcjar.txt)
-          jars="$MC $(find ~/.gradle/caches -name '*.jar' -path '*26.3*' 2>/dev/null | grep -i -E 'client|server|merged|common' | head -20)"
-          for f in \
-            data/minecraft/worldgen/world_preset/normal.json \
-            data/minecraft/worldgen/world_preset/flat.json \
-            data/minecraft/tags/worldgen/world_preset/normal.json \
-            data/minecraft/dimension_type/overworld.json \
-            data/minecraft/worldgen/biome/the_void.json \
-            data/minecraft/worldgen/biome/plains.json \
-            ; do
-            found=no
-            for j in $jars; do
-              if unzip -l "$j" "$f" >/dev/null 2>&1; then
-                echo "::group::$f (from $(basename "$j"))"
-                unzip -p "$j" "$f"; echo
-                echo "::endgroup::"
-                found=yes; break
-              fi
-            done
-            [ "$found" = yes ] || echo "NOT FOUND: $f"
-          done
-          echo "Jars searched:"; for j in $jars; do basename "$j"; done
+          cp -rv tools/api-probe/overlay/. . | sed 's#^.*overlay/##'
 
-      - name: Fabric API pieces
-        run: |
-          for jar in $(tr ':' '\n' < /tmp/cp.txt); do
-            case "$jar" in *fabric*) ;; *) continue ;; esac
-            unzip -l "$jar" 2>/dev/null | awk '{print $4}' | grep -E 'net/fabricmc/fabric/api/(event/lifecycle/v1/(ServerLifecycleEvents|ServerWorldEvents)|command/v2/CommandRegistrationCallback|gametest/.*|biome/v1/BiomeModifications)\.class' | while read -r cls; do
-              name=$(echo "${cls%.class}" | tr '/' '.')
-              echo "::group::$name"
-              javap -cp "$jar" "$name" | head -40
-              echo "::endgroup::"
-            done
-          done
+      - name: Build and unit-test the draft
+        working-directory: mod
+        run: ./gradlew build --stacktrace
 
-      - name: Compile the probe sources
-        if: hashFiles('tools/api-probe/**/*.java') != ''
+      - name: List test tasks
+        if: always()
+        working-directory: mod
+        run: ./gradlew tasks --all | grep -i -E 'gametest|^test' || true
+
+      - name: Run the GameTests
+        working-directory: mod
+        timeout-minutes: 20
+        run: ./gradlew runGameTest --stacktrace
+
+      - name: GameTest logs
+        if: always()
+        working-directory: mod
         run: |
-          CP="$(cat /tmp/cp.txt):mod/build/classes/java/main"
-          mkdir -p /tmp/probe-out
-          javac --release 25 -proc:none -Xlint:all -d /tmp/probe-out -cp "$CP" $(find tools/api-probe -name '*.java')
-          echo "PROBE COMPILE OK"
+          find . -path ./.gradle -prune -o -name 'latest.log' -print | while read -r f; do echo "::group::$f"; tail -200 "$f"; echo "::endgroup::"; done
+          find . -path ./.gradle -prune -o -name 'crash-*.txt' -print | while read -r f; do echo "::group::$f"; head -120 "$f"; echo "::endgroup::"; done
