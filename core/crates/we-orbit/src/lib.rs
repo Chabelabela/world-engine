@@ -5,5 +5,7 @@
 //! the XZ plane and their angular momentum points along +Y.
 
 pub mod kepler;
+pub mod system;
 
 pub use kepler::{KeplerOrbit, solve_kepler};
+pub use system::{Body, BodyId, CelestialSystem};
