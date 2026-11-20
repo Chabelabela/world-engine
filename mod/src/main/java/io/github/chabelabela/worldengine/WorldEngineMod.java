@@ -2,7 +2,9 @@ package io.github.chabelabela.worldengine;
 
 import com.mojang.brigadier.Command;
 import io.github.chabelabela.worldengine.nativebridge.NativeCore;
+import io.github.chabelabela.worldengine.nativebridge.NativeCoreException;
 import io.github.chabelabela.worldengine.nativebridge.NativeLibraryLoader;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import net.fabricmc.api.ModInitializer;
@@ -19,36 +21,55 @@ public final class WorldEngineMod implements ModInitializer {
     public static final String MOD_ID = "worldengine";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    private static NativeCore core; // set once in onInitialize
+    private static NativeCore core; // set once in onInitialize; null if the core is unavailable
     private static NativeCore.Universe universe; // server thread only
 
     @Override
     public void onInitialize() {
-        Path cache = FabricLoader.getInstance().getGameDir().resolve(".worldengine").resolve("natives");
-        Path library = NativeLibraryLoader.locate(cache);
-        core = NativeCore.load(library);
-        LOGGER.info("World Engine core loaded: ABI v{} from {}", core.abiVersion(), library);
-
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            if (universe != null) {
-                universe.close(); // only if a stop event was ever missed
-            }
-            universe = core.newDemoUniverse();
-        });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            if (universe != null) {
-                universe.close();
-                universe = null;
-            }
-        });
+        core = loadCore();
+        if (core != null) {
+            ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+                if (universe != null) {
+                    universe.close(); // only if a stop event was ever missed
+                }
+                universe = core.newDemoUniverse();
+            });
+            ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+                if (universe != null) {
+                    universe.close();
+                    universe = null;
+                }
+            });
+        }
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("worldengine")
                         .then(Commands.literal("bodies").executes(context -> printBodies(context.getSource())))));
     }
 
+    /** Loads the Rust core, or logs why it can't and returns null so the game still starts. */
+    private static NativeCore loadCore() {
+        Path cache = FabricLoader.getInstance().getGameDir().resolve(".worldengine").resolve("natives");
+        try {
+            Path library = NativeLibraryLoader.locate(cache);
+            NativeCore loaded = NativeCore.load(library);
+            NativeLibraryLoader.pruneStaleCaches(cache, library);
+            LOGGER.info("World Engine core loaded: ABI v{} from {}", loaded.abiVersion(), library);
+            return loaded;
+        } catch (NativeCoreException | UncheckedIOException e) {
+            LOGGER.error("World Engine core unavailable, so the mod stays inactive: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public static boolean isCoreAvailable() {
+        return core != null;
+    }
+
     private static int printBodies(CommandSourceStack source) {
         if (universe == null) {
-            source.sendFailure(Component.literal("World Engine universe is not running"));
+            source.sendFailure(Component.literal(core == null
+                    ? "World Engine core is unavailable on this platform (see the log)"
+                    : "World Engine universe is not running"));
             return 0;
         }
         universe.setTime(source.getLevel().getGameTime() / 20.0);
