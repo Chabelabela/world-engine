@@ -123,15 +123,19 @@ pub const TERRESTRIAL_CORNER_FLOOR: f64 = -300.0;
 pub const BARREN_CORNER_FLOOR: f64 = -150.0;
 
 // Subtropical dry belt: moisture drops by up to DRY_BELT_PEAK around
-// |sin latitude| = DRY_BELT_CENTRE and fades to nothing DRY_BELT_HALF_WIDTH
-// away. Deserts also need temperature >= 22 C, which at sea level means
-// |sin latitude| <= ~0.35, so the centre sits a little below the real-world
-// 25 degrees (0.42) and the belt is wide enough to reach into the hot band.
-// Tuned (seeds 1..=8, 6x64x64 grid): desert is 3.7-7.5% of land per seed,
-// against 0.05-1.2% before. Only +, -, * and smoothstep: deterministic.
-const DRY_BELT_CENTRE: f64 = 0.4;
+// |sin latitude| = DRY_BELT_CENTRE, fading to nothing DRY_BELT_HALF_WIDTH
+// away, and only where it is hot: the drying is scaled by
+// smoothstep(DRY_BELT_HOT_FROM, DRY_BELT_HOT_TO, temperature), so cool
+// temperate land (where Forest lives) keeps its moisture. Deserts need
+// >= 22 C, i.e. |sin latitude| <= ~0.35 at sea level, so the belt is centred
+// there rather than at the real-world 25 degrees (0.42). Tuned on seeds
+// 1..=8 over the 6x64x64 grid: Desert is 6.5-10.2% of land (0.05-1.2% with no
+// belt) and Forest 4.3-7.0%. Only +, -, * and smoothstep: deterministic.
+const DRY_BELT_CENTRE: f64 = 0.35;
 const DRY_BELT_HALF_WIDTH: f64 = 0.25;
-const DRY_BELT_PEAK: f64 = 0.5;
+const DRY_BELT_PEAK: f64 = 0.6;
+const DRY_BELT_HOT_FROM: f64 = 18.0;
+const DRY_BELT_HOT_TO: f64 = 26.0;
 
 fn smoothstep(edge0: f64, edge1: f64, x: f64) -> f64 {
     let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
@@ -251,7 +255,10 @@ impl Terrain {
                 + 5.0 * fbm(self.layer(4), p / 5_000.0, 2);
         // Subtropical dry belt (the Sahara/Australia latitudes): a smooth bump
         // in |sin latitude| that dries the air by up to DRY_BELT_PEAK.
+        // Only where it is hot, so temperate forests keep their moisture.
+        let hot = smoothstep(DRY_BELT_HOT_FROM, DRY_BELT_HOT_TO, temperature);
         let dry = DRY_BELT_PEAK
+            * hot
             * (1.0
                 - smoothstep(
                     0.0,
@@ -286,7 +293,7 @@ mod tests {
     use we_frames::{Face, SurfacePoint};
 
     const SEED: u64 = 42;
-    const TERRAIN_GOLDEN: u64 = 0xec57_2523_bf30_e0f7;
+    const TERRAIN_GOLDEN: u64 = 0x7d35_6930_66e2_9f28;
 
     fn home() -> (CubeSphere, Terrain) {
         let sphere = CubeSphere::new(16_384);
@@ -530,6 +537,9 @@ mod tests {
             let desert = f64::from(counts.get(&Biome::Desert).copied().unwrap_or(0));
             let share = desert / f64::from(land);
             assert!(share >= 0.03, "seed {seed}: desert share of land {share}");
+            let forest = f64::from(counts.get(&Biome::Forest).copied().unwrap_or(0));
+            let share = forest / f64::from(land);
+            assert!(share >= 0.03, "seed {seed}: forest share of land {share}");
             seen.extend(counts.keys().copied());
         }
         for biome in Biome::ALL {
