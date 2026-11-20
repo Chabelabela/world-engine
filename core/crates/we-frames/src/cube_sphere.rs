@@ -20,8 +20,17 @@ pub struct SurfacePoint {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Folded {
     pub point: SurfacePoint,
-    /// Rotation that carries grid directions (velocities, yaw, block facing)
-    /// from the old face to the new one.
+    /// Rotation that carries grid directions from the old face to the new
+    /// one. It is exact for grid-defined quantities: block facing, yaw and
+    /// grid velocities in the surface frame.
+    ///
+    /// It is *not* a rotation on the sphere. Grid lines kink at seams
+    /// everywhere except an edge's midpoint (by up to about 60° near corners).
+    /// To carry a physical, body-frame velocity across, go through the body
+    /// frame instead: [`CubeSphere::velocity_to_body`] at the old point, then
+    /// [`CubeSphere::velocity_to_surface`] at the new one. For the same
+    /// reason, a player's yaw is preserved relative to the grid, so it shifts
+    /// slightly relative to the sphere at a seam.
     pub turns: QuarterTurns,
 }
 
@@ -184,8 +193,10 @@ impl CubeSphere {
     ///
     /// Valid range: no more than one face width (`cells` blocks) beyond the
     /// edge. `None` if `p` is inside its face (edges included), beyond a
-    /// corner, further than one face width out, or not finite. What happens beyond a corner (the
-    /// missing quadrant of the unfolded cube) is defined by M1e.
+    /// corner, further than one face width out, or not finite. What happens
+    /// beyond a corner (the missing quadrant of the unfolded cube) is defined
+    /// by M1e. See [`Folded::turns`] for what the rotation does and does not
+    /// preserve.
     pub fn fold(self, p: SurfacePoint) -> Option<Folded> {
         let h = self.half();
         let (face, x, z, turns) = p.face.fold_centered(p.x - h, p.z - h, h)?;
