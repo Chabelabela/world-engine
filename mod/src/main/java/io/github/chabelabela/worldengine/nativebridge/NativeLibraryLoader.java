@@ -3,12 +3,15 @@ package io.github.chabelabela.worldengine.nativebridge;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.stream.Stream;
 
 /** Finds the core library: a dev override path, or the copy bundled in the mod jar. */
 public final class NativeLibraryLoader {
@@ -53,6 +56,43 @@ public final class NativeLibraryLoader {
             return target;
         } catch (IOException e) {
             throw new UncheckedIOException("Could not extract the World Engine native library", e);
+        }
+    }
+
+    /**
+     * Best-effort removal of the cache folders other versions of the core left
+     * behind: every folder in {@code cacheDir} except the one holding
+     * {@code library}. Does nothing if {@code library} is not in the cache (the
+     * dev override). Failures are ignored: on Windows another running game may
+     * still hold an old DLL open, and it will be pruned next time.
+     */
+    public static void pruneStaleCaches(Path cacheDir, Path library) {
+        Path keep = library.getParent();
+        if (keep == null || !cacheDir.equals(keep.getParent())) {
+            return;
+        }
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(cacheDir)) {
+            for (Path entry : entries) {
+                if (Files.isDirectory(entry) && !entry.equals(keep)) {
+                    deleteRecursively(entry);
+                }
+            }
+        } catch (IOException e) {
+            // best effort
+        }
+    }
+
+    private static void deleteRecursively(Path dir) {
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    // best effort
+                }
+            });
+        } catch (IOException e) {
+            // best effort
         }
     }
 

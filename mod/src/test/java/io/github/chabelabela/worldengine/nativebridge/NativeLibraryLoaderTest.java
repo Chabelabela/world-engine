@@ -2,8 +2,10 @@ package io.github.chabelabela.worldengine.nativebridge;
 
 import static io.github.chabelabela.worldengine.nativebridge.NativeLibraryLoader.OVERRIDE_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -43,5 +45,23 @@ class NativeLibraryLoaderTest {
         assertTrue(first.startsWith(cache));
         assertEquals(first, NativeLibraryLoader.locate(cache));
         assertEquals(NativeCore.EXPECTED_ABI_VERSION, NativeCore.load(first).abiVersion());
+    }
+
+    @Test
+    void prunesOtherCacheFoldersButKeepsTheCurrentOne(@TempDir Path cache) throws IOException {
+        Path current = Files.createDirectories(cache.resolve("aaaa")).resolve("libworldengine_core.so");
+        Files.writeString(current, "current");
+        Path stale = Files.createDirectories(cache.resolve("bbbb"));
+        Files.writeString(stale.resolve("libworldengine_core.so"), "old");
+        NativeLibraryLoader.pruneStaleCaches(cache, current);
+        assertTrue(Files.exists(current));
+        assertFalse(Files.exists(stale));
+    }
+
+    @Test
+    void pruneLeavesTheCacheAloneForLibrariesOutsideIt(@TempDir Path cache) throws IOException {
+        Path stale = Files.createDirectories(cache.resolve("bbbb"));
+        NativeLibraryLoader.pruneStaleCaches(cache, Path.of("/elsewhere/libworldengine_core.so"));
+        assertTrue(Files.exists(stale));
     }
 }
