@@ -1,0 +1,16 @@
+# Rust
+/core/target/
+
+# Gradle / Loom
+/mod/.gradle/
+/mod/build/
+/mod/run/
+/mod/.idea/
+*.iml
+
+# CI scratch (natives gathered from the build matrix)
+/natives-download/
+/natives-all/
+
+# OS
+.DS_Store

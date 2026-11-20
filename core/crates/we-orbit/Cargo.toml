@@ -1,0 +1,9 @@
+[package]
+name = "we-orbit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Keplerian orbits and the celestial body hierarchy for World Engine"
+
+[dependencies]
+glam.workspace = true

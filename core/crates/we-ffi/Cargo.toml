@@ -1,0 +1,13 @@
+[package]
+name = "we-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "C ABI of the World Engine core, consumed by the Fabric mod via Java FFM"
+
+[lib]
+name = "worldengine_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+we-orbit.workspace = true
