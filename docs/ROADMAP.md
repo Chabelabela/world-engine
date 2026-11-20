@@ -255,7 +255,7 @@ The sizes below are **rough planning ranges for one experienced developer workin
   - The period reduction of `t − epoch` was dropped after analysis. It can't beat the precision of an f64 `t`; M3 decides the clock representation.
 - **Spike first (2 weeks, time-boxed):** a fake hand-moved "ship" carries a player between a planet face and a shipyard plot with no loading screen. Record the findings as a design record (`docs/adr/0001-frames-and-handoff.md`).
 - `we-frames`: the cube-sphere projection, face↔block coordinates, the seam adjacency table with rotations, and the handoff transforms. Property tests cover round trips, adjacency consistency and distortion bounds.
-- `we-planet` v0: deterministic terrain height and climate bands as functions on the unit sphere, keyed by seed.
+- `we-planet` v0: deterministic terrain height, climate and biomes as functions on the unit sphere, keyed by seed. **Done in M1c** ([plan](superpowers/plans/2026-11-20-m1c-planet-terrain.md)). Results are bit-identical on every platform (checked in CI on Linux x64/arm64, Windows and macOS), and a thread-safe batched FFI call serves chunk generation.
 - A **World Engine world preset**: the overworld becomes the universe level with the cross-net layout for the home planet and the moon. The Nether and End are left untouched for now.
 - A chunk generator that makes one batched FFI call per chunk (heights and biome ids), with vanilla features and structures layered on top through biomes.
 - Seams: overlap bands, edit mirroring, and entity teleport with rotated position, velocity and look direction.

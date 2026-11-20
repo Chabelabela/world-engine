@@ -2648,6 +2648,21 @@ git push
 
 ---
 
+> **Post-review note (2026-11-20):** M1c was executed with subagents. A Rust and a Java quality review followed, each with fixes and a re-review. The repository, not this plan, is now the source of truth for these files.
+> - Rust (`c506d3a`, `264e5e2`):
+>   - Guaranteed height bounds `MIN_HEIGHT`/`MAX_HEIGHT` (−400..700 m), clamped.
+>   - `glam` and `libm` pinned to exact versions.
+>   - A subtropical dry belt, applied only where it is hot, so every seed has deserts and temperate forests (Desert 6.5–10% and Forest 4.3–7% of land on seeds 1–8).
+>   - The corner-ocean blend widened to 4–12°.
+>   - `TERRAIN_VERSION = 1`.
+>   - `we_terrain_columns` rejects cells > `i32::MAX`.
+>   - `TERRAIN_GOLDEN` re-pinned to `0x7d35_6930_66e2_9f28` (the model changed before any world shipped). `PROJECTION_GOLDEN` is unchanged.
+> - Java (`3d05285`):
+>   - Validation before allocation, with `MAX_COLUMNS`.
+>   - `Error`s are rethrown, not wrapped.
+>   - `TerrainColumns` gained validation, value equality and `MIN_HEIGHT`/`MAX_HEIGHT`.
+>   - A barrier-gated concurrency test with distinct regions per thread.
+
 ## Self-review against the M1c goals
 
 | Goal (M1 overview + M1a final review) | Task |
