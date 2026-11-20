@@ -48,10 +48,10 @@ The vision is the right ambition. These adjustments keep it buildable.
 | Rendering in Vulkan or OpenGL | Render through **Minecraft's own GPU abstraction** and stay compatible with Sodium. | Mojang is switching backends. Raw GL or Vulkan calls would break. |
 | A custom client-server protocol | Use **Fabric custom payloads** over the vanilla connection. | No second port, NAT or server-host problems. Works on every server. |
 | Procedural generation in Rust plus GPU compute | **Rust on the CPU first.** Add GPU compute only where profiling shows a need. | Determinism and testability. Dedicated servers usually have no GPU. |
-| Fluid dynamics, heat transfer and energy conservation everywhere | **Targeted models**: atmospheric drag, re-entry heating and structural breakup first, then thermal and power networks. | Full fluid dynamics isn't tractable at game rates. Players feel the targeted effects anyway. |
+| Fluid dynamics, heat transfer and energy conservation everywhere | **Targeted models**: atmospheric drag, re-entry heating and structural breakup first, then thermal and power networks. **Fluid dynamics is revisited after 0.1** (see the open decisions in §8). | Full fluid dynamics isn't tractable at game rates today. Players feel the targeted effects anyway. |
 | Every planet runs geology, ecosystems and evolution live | Simulate **"pre-history" once at world creation**, then run a slow coarse live simulation, then **catch up** when chunks load. | This delivers "millions of years of evolution" for seconds of compute. |
 | "A sufficiently massive object influences orbital trajectories" | **Patched conics** (one dominant body at a time) through M8. Full N-body arrives in M9, when planetary engines need it. | Stable, deterministic and cheap. It allows time warp, and client and server compute identical results. |
-| "Life could evolve according to environmental conditions" | Ecosystems are **populations that spread and retreat** with climate and player impact (M6). True genetic evolution waits until after 1.0. | Populations deliver the visible effect. Simulating evolution is a research project of its own. |
+| "Life could evolve according to environmental conditions" | **Both, combined** (M6). **Populations** run the day-to-day ecosystem: species spread, compete and cycle as predators and prey. **Genetic evolution** changes the species themselves: traits are inherited, mutate and are selected by the environment, and new species split off. | Populations keep the live simulation cheap and readable. Evolution makes each planet's life unique and gives "millions of years of simulated evolution" real meaning. |
 | "Forget dimensions. One continuous environment." | **One continuous simulation.** The voxels live in one Minecraft level, and the handoffs between regions of it are invisible. | Truly spherical voxel planets with radial gravity would break almost every vanilla mechanic (mobs, redstone, fluids, structures, player movement). |
 | GPU-driven chunk rendering, virtualized geometry, global illumination | **Deferred to M10**, after the Vulkan switch. | Highest cost and lowest necessity for the North Star. |
 
@@ -184,6 +184,7 @@ world-engine/
 │       ├── we-physics/         M2  Rapier wrapper, ship bodies, mass properties
 │       ├── we-sim/             M3  clock, ships, rails/integration, scenarios
 │       ├── we-env/             M6  live environmental simulation
+│       ├── we-life/            M6  species, genomes, populations, evolution
 │       └── we-sandbox/         M1+ dev-only viewer and headless scenario runner
 ├── mod/                        Fabric mod (Gradle + Loom)
 │   └── src/main/java/io/github/chabelabela/worldengine/
@@ -229,7 +230,8 @@ The sizes below are **rough planning ranges for one experienced developer workin
 | M3 Planetary system | 2–3 months | ~8–13 months |
 | M4 Planetary rendering | 2–4 months | ~10–17 months |
 | M5 Spacecraft and the Ultimate Test | 2–4 months | **~12–21 months to the North Star** |
-| M6–M9 | 3–6 months each | Post-alpha |
+| M6 Living planets (with evolution) | 4–8 months | Post-alpha |
+| M7–M9 | 3–6 months each | Post-alpha |
 
 ### M0 — Foundations · *toolchain and bridge*
 **Goal:** Rust core, Fabric mod and CI all work together on every platform before any gameplay work starts.
@@ -296,13 +298,21 @@ The sizes below are **rough planning ranges for one experienced developer workin
 
 **Exit:** the Ultimate Test passes three ways: (1) one player in a single continuous session; (2) two players aboard in multiplayer; (3) the automated scenario in CI. Then **release 0.1 as a public alpha**.
 
-### M6 — Living planets · *environmental simulation*
-- **Pre-history at world creation** on a coarse grid of about 64–256 blocks per cell: simplified plate tectonics (plates, uplift, volcano placement), hydraulic and thermal erosion, river networks, and a climate model whose output becomes the biome map. Target: ≤ 60 s per planet on 8 cores.
-- **Slow live simulation:** weather cells (pressure, temperature and humidity driving rain, storms and snow), seasons from axial tilt, vegetation spread and retreat, ecosystems as populations per cell, and volcanic and glacial events as scheduled discrete events. Also tides driven by the moon.
+### M6 — Living planets · *environmental simulation and evolving life*
+- **Pre-history at world creation** on a coarse grid of about 64–256 blocks per cell: simplified plate tectonics (plates, uplift, volcano placement), hydraulic and thermal erosion, river networks, and a climate model whose output becomes the biome map. Evolution (below) runs fast during this phase. Target: ≤ 2 min per planet on 8 cores, shown as a "planet forming" progress screen at world creation.
+- **Slow live simulation:** weather cells (pressure, temperature and humidity driving rain, storms and snow), seasons from axial tilt, vegetation spread and retreat, and volcanic and glacial events as scheduled discrete events. Also tides driven by the moon.
+- **Life (`we-life`): populations and evolution combined.**
+  - **Genomes:** every species, plant or animal, has a genome, a small vector of heritable traits. Examples: temperature and humidity tolerance, size, diet, speed, reproduction rate, and appearance genes.
+  - **Populations:** each cell holds populations per species, with trait distributions rather than individuals. They drive the visible ecosystem: spreading, competition, and predator/prey cycles.
+  - **Evolution:** each generation step, traits are inherited with mutation, and the local environment selects (fitness = how well the traits match the cell's climate, food and predators).
+  - **Speciation:** a population whose traits drift far enough from its parent species, or that is cut off by geography (an ocean, a mountain range), splits into a new species.
+  - **Time scales:** evolution runs over millions of years in coarse steps during pre-history, and slowly during play. Players can watch a population adapt after they terraform or change the climate.
+  - **In-game creatures:** each animal species maps to a mob variant whose scale, colours, model parts and behavior parameters come from its genome. It starts from vanilla mob bases, with procedural bodies later. Plant species map to tree and vegetation variants the same way.
+  - **Bestiary:** a "tree of life" records discovered species and their ancestry.
 - **Catch-up on chunk load:** deterministic replay of events, so unloaded regions evolve too.
-- Player impact: deforestation, atmosphere composition, terraforming hooks.
+- Player impact: deforestation, hunting pressure, atmosphere composition, terraforming hooks. All of them feed into selection.
 
-**Exit:** two seeds produce planets that are distinct and geologically plausible. A region left unloaded for years of game time has visibly changed. Every player sees weather move consistently.
+**Exit:** two seeds produce planets that are distinct and geologically plausible. A region left unloaded for years of game time has visibly changed. Every player sees weather move consistently. Two planets with similar starting conditions end up with different species. After a large climate change, a population's traits measurably shift within a set number of in-game years. The bestiary shows a believable family tree.
 
 ### M7 — Engineering consequences · *stations and bases*
 - A full structural stress graph, heat transfer with radiators, power networks, and life support (detecting sealed volumes, oxygen and CO₂).
@@ -388,8 +398,9 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 | 9 | Precision bugs far from the origin | Low | Med | f64 core. Camera-relative rendering. Tests at large coordinates. |
 | 10 | Solo-developer bandwidth | High | High | Milestones that each produce a demo. A public devlog. Recruit a rendering developer by M2. |
 | 11 | Java 24+ warns about restricted native access at startup | High | Low | Cosmetic. Document it, and pass `--enable-native-access` in dev runs. |
+| 12 | Evolution produces dull, degenerate or runaway results, or is too slow | Med | Med | Start with a small trait set and deterministic seeds. Build a `we-sandbox` view of the family tree and trait histograms. Run tests for diversity and stability. Give evolution a fixed share of the pre-history budget. |
 
-**Not now (explicitly out of scope until after 0.1):** thousands of blocks and items; replacing the chunk renderer; radial gravity acting on blocks; full N-body for planets; computational fluid dynamics; genetic evolution of species; NeoForge, Forge or Bedrock ports.
+**Not now (explicitly out of scope until after 0.1):** thousands of blocks and items; replacing the chunk renderer; radial gravity acting on blocks; full N-body for planets; full computational fluid dynamics (to be revisited, see §8); NeoForge, Forge or Bedrock ports.
 
 ---
 
@@ -403,6 +414,7 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 | Play mode first | Creative sandbox until M5, survival progression after 0.1 | Survival from the start (more content, slower to the North Star) |
 | Team | Solo, with a rendering collaborator sought by M2 | Recruit earlier and run M4 alongside M2 and M3 |
 | Identity | Mod id `worldengine`, package `io.github.chabelabela.worldengine` | Your own domain |
+| Fluid dynamics | **Revisit after 0.1.** Until then: targeted models (drag, lift, re-entry heating) and vanilla fluids | A grid-based fluid simulation for water and air in bounded volumes (flooding, pressure loss in hulls, rivers that reshape terrain) |
 
 ## 9. Next steps
 
