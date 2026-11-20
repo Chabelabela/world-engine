@@ -19,7 +19,7 @@ public final class WorldEngineMod implements ModInitializer {
     public static final String MOD_ID = "worldengine";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    private static NativeCore core;
+    private static NativeCore core; // set once in onInitialize
     private static NativeCore.Universe universe; // server thread only
 
     @Override
@@ -29,7 +29,12 @@ public final class WorldEngineMod implements ModInitializer {
         core = NativeCore.load(library);
         LOGGER.info("World Engine core loaded: ABI v{} from {}", core.abiVersion(), library);
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> universe = core.newDemoUniverse());
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            if (universe != null) {
+                universe.close(); // only if a stop event was ever missed
+            }
+            universe = core.newDemoUniverse();
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             if (universe != null) {
                 universe.close();
