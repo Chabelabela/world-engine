@@ -45,6 +45,9 @@ impl PlanetLayout {
     /// The face and grid position at level coordinates (`lx`, `lz`), or
     /// `None` outside every face.
     pub fn from_level(self, lx: f64, lz: f64) -> Option<(Face, f64, f64)> {
+        if !(lx.is_finite() && lz.is_finite()) {
+            return None;
+        }
         let n = f64::from(self.cells);
         let rx = lx - self.origin_x as f64;
         let rz = lz - self.origin_z as f64;
@@ -109,6 +112,14 @@ mod tests {
         ] {
             assert_eq!(l.from_level(ox + rx, oz + rz), None);
         }
+    }
+
+    #[test]
+    fn non_finite_level_coordinates_are_no_face() {
+        let l = layout();
+        assert_eq!(l.from_level(f64::NAN, 0.0), None);
+        assert_eq!(l.from_level(0.0, f64::INFINITY), None);
+        assert_eq!(l.from_level(f64::NEG_INFINITY, f64::NAN), None);
     }
 
     #[test]

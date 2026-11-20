@@ -4,36 +4,49 @@ use glam::DVec3;
 /// `E0..E3` run eastward (prograde), starting at +X. `North` is +Y (the spin
 /// axis) and `South` is −Y.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Face {
-    E0,
-    E1,
-    E2,
-    E3,
-    North,
-    South,
+    E0 = 0,
+    E1 = 1,
+    E2 = 2,
+    E3 = 3,
+    North = 4,
+    South = 5,
 }
 
 /// A side of a face's block grid. Grid x grows east and grid z grows south,
 /// so `West` is x = 0 and `North` is z = 0.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Edge {
-    West,
-    East,
-    North,
-    South,
+    West = 0,
+    East = 1,
+    North = 2,
+    South = 3,
 }
 
 /// A rotation of the block grid by whole quarter turns, clockwise seen from
 /// above (east turns into south), like Minecraft's `Rotation.CLOCKWISE_90`.
+/// Always normalised to 0..=3 turns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct QuarterTurns(pub u8);
+pub struct QuarterTurns(u8);
 
 impl QuarterTurns {
-    pub const NONE: Self = Self(0);
+    pub const NONE: Self = Self::new(0);
+
+    /// `k` quarter turns, taken modulo 4.
+    pub const fn new(k: u8) -> Self {
+        Self(k % 4)
+    }
+
+    /// The number of clockwise quarter turns, 0..=3.
+    pub fn count(self) -> u8 {
+        self.0
+    }
 
     /// Rotate a grid direction (dx east, dz south).
     pub fn apply(self, dx: f64, dz: f64) -> (f64, f64) {
-        match self.0 % 4 {
+        match self.0 {
             0 => (dx, dz),
             1 => (-dz, dx),
             2 => (-dx, -dz),
@@ -42,22 +55,23 @@ impl QuarterTurns {
     }
 
     /// Rotate a Minecraft yaw in degrees (0 = south, 90 = west, -90 = east).
+    /// The result is wrapped into [-180, 180).
     pub fn rotate_yaw(self, yaw: f32) -> f32 {
-        yaw + 90.0 * f32::from(self.0 % 4)
+        (yaw + 90.0 * f32::from(self.0) + 180.0).rem_euclid(360.0) - 180.0
     }
 
     pub fn inverse(self) -> Self {
-        Self((4 - self.0 % 4) % 4)
+        Self::new(4 - self.0)
     }
 
     /// The rotation that turns grid east (1, 0) into `image`, an axis-aligned
     /// unit vector.
     fn from_east_image(image: (f64, f64)) -> Self {
         match (image.0.round() as i8, image.1.round() as i8) {
-            (1, 0) => Self(0),
-            (0, 1) => Self(1),
-            (-1, 0) => Self(2),
-            (0, -1) => Self(3),
+            (1, 0) => Self::new(0),
+            (0, 1) => Self::new(1),
+            (-1, 0) => Self::new(2),
+            (0, -1) => Self::new(3),
             other => unreachable!("not an axis direction: {other:?}"),
         }
     }
@@ -106,7 +120,8 @@ impl Face {
     }
 
     /// The face whose normal is the axis `normal` (exactly ±X, ±Y or ±Z).
-    pub fn from_normal(normal: DVec3) -> Face {
+    /// Internal invariant: panics on anything else.
+    pub(crate) fn from_normal(normal: DVec3) -> Face {
         Face::ALL
             .into_iter()
             .find(|f| f.normal().distance_squared(normal) < 1e-12)
@@ -114,17 +129,23 @@ impl Face {
     }
 
     /// The face a direction points through: the axis with the largest
-    /// absolute component.
+    /// absolute component (ties go to x, then y, then z). Never panics, but
+    /// non-finite input yields an arbitrary face; callers validate.
     pub fn of_direction(dir: DVec3) -> Face {
         let a = dir.abs();
-        let axis = if a.x >= a.y && a.x >= a.z {
-            DVec3::X * dir.x.signum()
+        if a.x >= a.y && a.x >= a.z {
+            if dir.x >= 0.0 { Face::E0 } else { Face::E2 }
         } else if a.y >= a.z {
-            DVec3::Y * dir.y.signum()
+            if dir.y >= 0.0 {
+                Face::North
+            } else {
+                Face::South
+            }
+        } else if dir.z >= 0.0 {
+            Face::E3
         } else {
-            DVec3::Z * dir.z.signum()
-        };
-        Face::from_normal(axis)
+            Face::E1
+        }
     }
 
     /// The face across `edge`, and the edge of that face you arrive through.
@@ -153,16 +174,24 @@ impl Face {
     /// lies beyond, onto the neighbouring face, as if the cube's surface were
     /// unfolded flat across that edge. Returns the neighbour, the centred
     /// coordinates there, and the rotation that carries grid directions across.
-    /// `None` if the point is inside the face or beyond a corner.
+    /// `None` if the point is inside the face, beyond a corner, not finite, or
+    /// more than one face width beyond the edge (the crossed coordinate must
+    /// satisfy `half < |p| <= 3 * half`).
     pub(crate) fn fold_centered(
         self,
         px: f64,
         pz: f64,
         half: f64,
     ) -> Option<(Face, f64, f64, QuarterTurns)> {
+        if !(px.is_finite() && pz.is_finite()) {
+            return None;
+        }
         let beyond_x = px.abs() > half;
         let beyond_z = pz.abs() > half;
         if beyond_x == beyond_z {
+            return None;
+        }
+        if px.abs().max(pz.abs()) > 3.0 * half {
             return None;
         }
         let (n, e, s) = (self.normal(), self.east(), self.south());
@@ -284,20 +313,72 @@ mod tests {
     #[test]
     fn quarter_turns_compose_and_invert() {
         for k in 0..4 {
-            let q = QuarterTurns(k);
+            let q = QuarterTurns::new(k);
             let (x, z) = q.apply(0.3, -0.7);
             let (bx, bz) = q.inverse().apply(x, z);
             assert!((bx - 0.3).abs() < 1e-15 && (bz + 0.7).abs() < 1e-15);
         }
         assert_eq!(
-            QuarterTurns(1).apply(1.0, 0.0),
+            QuarterTurns::new(1).apply(1.0, 0.0),
             (-0.0, 1.0),
             "east turns south"
         );
         assert_eq!(
-            QuarterTurns(1).rotate_yaw(-90.0),
+            QuarterTurns::new(1).rotate_yaw(-90.0),
             0.0,
             "facing east turns to facing south"
         );
+    }
+
+    #[test]
+    fn of_direction_never_panics() {
+        for v in [
+            DVec3::ZERO,
+            DVec3::NAN,
+            DVec3::new(f64::INFINITY, 0.0, 0.0),
+            DVec3::new(f64::NEG_INFINITY, f64::NAN, 1.0),
+            DVec3::new(0.0, f64::NAN, f64::INFINITY),
+        ] {
+            let face = Face::of_direction(v);
+            assert!(Face::ALL.contains(&face));
+        }
+        assert_eq!(Face::of_direction(DVec3::ONE), Face::E0, "tie goes to x");
+        assert_eq!(Face::of_direction(DVec3::new(0.0, -1.0, 1.0)), Face::South);
+    }
+
+    #[test]
+    fn fold_range_is_one_face_width() {
+        let half = 4.0;
+        let f = Face::E0;
+        assert!(f.fold_centered(3.0 * half, 1.0, half).is_some());
+        assert!(f.fold_centered(-3.0 * half, 1.0, half).is_some());
+        assert!(f.fold_centered(1.0, 3.0 * half, half).is_some());
+        assert!(f.fold_centered(3.0 * half + 1e-9, 1.0, half).is_none());
+        assert!(f.fold_centered(1.0, -3.0 * half - 1e-9, half).is_none());
+        for (px, pz) in [
+            (f64::NAN, 0.0),
+            (5.0, f64::NAN),
+            (f64::INFINITY, 0.0),
+            (0.0, f64::NEG_INFINITY),
+        ] {
+            assert!(f.fold_centered(px, pz, half).is_none(), "{px} {pz}");
+        }
+    }
+
+    #[test]
+    fn quarter_turns_are_normalised() {
+        assert_eq!(QuarterTurns::new(5), QuarterTurns::new(1));
+        assert_eq!(QuarterTurns::new(4), QuarterTurns::NONE);
+        assert_eq!(QuarterTurns::new(7).count(), 3);
+        assert_eq!(QuarterTurns::new(3).rotate_yaw(170.0), 80.0);
+        assert_eq!(QuarterTurns::new(2).rotate_yaw(170.0), -10.0);
+        assert_eq!(QuarterTurns::NONE.rotate_yaw(-180.0), -180.0);
+    }
+
+    #[test]
+    fn discriminants_are_stable() {
+        assert_eq!(Face::ALL.map(|f| f as u8), [0, 1, 2, 3, 4, 5]);
+        assert_eq!(Edge::South as u8, 3);
+        assert_eq!(Edge::West as u8, 0);
     }
 }
