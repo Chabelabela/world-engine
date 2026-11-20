@@ -2648,7 +2648,7 @@ git push
 
 ---
 
-> **Post-review note (2026-11-20):** M1c was executed with subagents. A Rust and a Java quality review followed, each with fixes and a re-review. The repository, not this plan, is now the source of truth for these files.
+> **Post-review note (2026-11-20):** The pre-execution numbers in this plan's header (heights, land share, biome counts) predate these fixes. M1c was executed with subagents. A Rust and a Java quality review followed, each with fixes and a re-review. The repository, not this plan, is now the source of truth for these files.
 > - Rust (`c506d3a`, `264e5e2`):
 >   - Guaranteed height bounds `MIN_HEIGHT`/`MAX_HEIGHT` (−400..700 m), clamped.
 >   - `glam` and `libm` pinned to exact versions.
