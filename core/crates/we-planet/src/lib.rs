@@ -11,5 +11,7 @@
 //!   world generation may call it from any number of threads.
 
 mod hash;
+mod noise;
 
 pub use hash::{hash3, layer_seed, mix};
+pub use noise::{fbm, gradient};
