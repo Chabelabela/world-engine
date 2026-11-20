@@ -1,3 +1,4 @@
+use crate::cube_sphere::CubeSphere;
 use crate::face::Face;
 
 /// Where a planet's six faces sit in a Minecraft level, as a cross-shaped
@@ -12,15 +13,38 @@ use crate::face::Face;
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlanetLayout {
-    /// Level block x of E0's north-west corner.
-    pub origin_x: i64,
-    /// Level block z of E0's north-west corner.
-    pub origin_z: i64,
-    /// Blocks per face edge.
-    pub cells: u32,
+    origin_x: i64,
+    origin_z: i64,
+    cells: u32,
 }
 
 impl PlanetLayout {
+    /// Place `sphere`'s faces with E0's north-west corner at level block
+    /// (`origin_x`, `origin_z`). The face size always comes from the sphere,
+    /// so the layout and the projection can't disagree.
+    pub fn new(origin_x: i64, origin_z: i64, sphere: CubeSphere) -> Self {
+        Self {
+            origin_x,
+            origin_z,
+            cells: sphere.cells(),
+        }
+    }
+
+    /// Level block x of E0's north-west corner.
+    pub fn origin_x(self) -> i64 {
+        self.origin_x
+    }
+
+    /// Level block z of E0's north-west corner.
+    pub fn origin_z(self) -> i64 {
+        self.origin_z
+    }
+
+    /// Blocks per face edge.
+    pub fn cells(self) -> u32 {
+        self.cells
+    }
+
     fn offset(self, face: Face) -> (i64, i64) {
         let n = i64::from(self.cells);
         match face {
@@ -81,11 +105,7 @@ mod tests {
     const N: u32 = 16_384;
 
     fn layout() -> PlanetLayout {
-        PlanetLayout {
-            origin_x: -40_000,
-            origin_z: 1_000_000,
-            cells: N,
-        }
+        PlanetLayout::new(-40_000, 1_000_000, CubeSphere::new(N))
     }
 
     #[test]

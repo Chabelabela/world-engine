@@ -134,17 +134,18 @@ impl CubeSphere {
     /// Cells are half-open: cell `i` covers `i <= x < i + 1`, and the face
     /// covers `[0, cells)`. A point exactly on the far edge (`x == cells`,
     /// which [`Self::grid_of`] can return on a seam) belongs to the last cell.
-    /// Points beyond an edge must be folded first ([`Self::fold`]).
-    pub fn cell_of(self, p: SurfacePoint) -> (i64, i64) {
+    /// Points beyond an edge must be folded first ([`Self::fold`]); for them,
+    /// and for non-finite coordinates, this returns `None`.
+    pub fn cell_of(self, p: SurfacePoint) -> Option<(i64, i64)> {
         let n = f64::from(self.cells);
         // Small tolerance: grid_of may overshoot a seam by rounding error.
-        debug_assert!(
-            (-1e-6..=n + 1e-6).contains(&p.x) && (-1e-6..=n + 1e-6).contains(&p.z),
-            "point outside its face: {p:?}"
-        );
+        let on_face = |v: f64| (-1e-6..=n + 1e-6).contains(&v);
+        if !on_face(p.x) || !on_face(p.z) {
+            return None;
+        }
         let last = i64::from(self.cells) - 1;
         let cell = |v: f64| (v.floor() as i64).clamp(0, last);
-        (cell(p.x), cell(p.z))
+        Some((cell(p.x), cell(p.z)))
     }
 
     /// Columns ∂P/∂x, ∂P/∂y, ∂P/∂z of the Jacobian of [`Self::to_body`].
@@ -497,10 +498,22 @@ mod tests {
         let s = sphere();
         let n = f64::from(N);
         let last = i64::from(N) - 1;
-        assert_eq!(s.cell_of(point(Face::E0, 0.0, 0.0, 0.0)), (0, 0));
-        assert_eq!(s.cell_of(point(Face::E0, n, 0.0, n)), (last, last));
-        assert_eq!(s.cell_of(point(Face::E0, 1.0, 0.0, 2.999)), (1, 2));
-        assert_eq!(s.cell_of(point(Face::E0, n - 1e-9, 0.0, 0.5)), (last, 0));
+        assert_eq!(s.cell_of(point(Face::E0, 0.0, 0.0, 0.0)), Some((0, 0)));
+        assert_eq!(s.cell_of(point(Face::E0, n, 0.0, n)), Some((last, last)));
+        assert_eq!(s.cell_of(point(Face::E0, 1.0, 0.0, 2.999)), Some((1, 2)));
+        assert_eq!(
+            s.cell_of(point(Face::E0, n - 1e-9, 0.0, 0.5)),
+            Some((last, 0))
+        );
+    }
+
+    #[test]
+    fn cell_of_rejects_points_off_the_face() {
+        let s = sphere();
+        let n = f64::from(N);
+        assert_eq!(s.cell_of(point(Face::E0, -0.5, 0.0, 3.0)), None);
+        assert_eq!(s.cell_of(point(Face::E0, 3.0, 0.0, n + 0.5)), None);
+        assert_eq!(s.cell_of(point(Face::E0, f64::NAN, 0.0, 3.0)), None);
     }
 
     /// FNV-1a over the exact bits of many projections. A failure on one
