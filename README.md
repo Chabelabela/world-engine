@@ -10,7 +10,10 @@ A Minecraft (Java Edition 26.3, Fabric) mod that turns the game into a physicall
 |---|---|
 | [docs/VISION.md](docs/VISION.md) | The original concept |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The master plan: architecture, the spatial model, milestones M0–M10, risks, open decisions |
-| [docs/superpowers/plans/2026-11-20-m0-foundations.md](docs/superpowers/plans/2026-11-20-m0-foundations.md) | Step-by-step implementation plan for milestone 0 (Rust core + Fabric mod + CI) |
+| [docs/superpowers/plans/2026-11-20-m0-foundations.md](docs/superpowers/plans/2026-11-20-m0-foundations.md) | Step-by-step implementation plan for milestone 0 (Rust core + Fabric mod + CI), done |
+| [docs/superpowers/plans/2026-11-20-m1-overview.md](docs/superpowers/plans/2026-11-20-m1-overview.md) | M1 (spatial engine) overview: phases M1a–M1f, design decisions, spike questions |
+| [docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md](docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md) | Step-by-step plan for M1a: M0 review carry-overs and the `we-frames` cube-sphere math |
+| [docs/superpowers/plans/2026-11-20-m1b-handoff-spike.md](docs/superpowers/plans/2026-11-20-m1b-handoff-spike.md) | Experiment plan for the frame-handoff spike, ending in ADR 0001 |
 
 ## Building
 

@@ -244,6 +244,11 @@ The sizes below are **rough planning ranges for one experienced developer workin
 
 ### M1 — Spatial engine · *"walk around a planet"*
 **Goal:** Break Minecraft's flat-world assumption.
+**Plans:**
+- [M1 overview](superpowers/plans/2026-11-20-m1-overview.md): phases M1a–M1f and their order.
+- [M1a foundations and frames](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md): detailed, with verified code.
+- [M1b handoff spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md): an experiment plan that ends in an ADR.
+- The M1c–M1f plans are written after M1a and the ADR.
 - **Entry tasks carried over from the M0 code review**, to do before `we-frames` or `we-sim` depend on `we-orbit`:
   - Introduce a `BodyId(u32)` newtype.
   - Store a body's parent and orbit together (`Option<Link>`).
@@ -429,6 +434,6 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 
 ## 9. Next steps
 
-1. Execute the [M0 plan](superpowers/plans/2026-11-20-m0-foundations.md).
+1. ~~Execute the [M0 plan](superpowers/plans/2026-11-20-m0-foundations.md).~~ Done. CI is green on Linux, Windows and macOS. The manual in-game smoke test is still open.
 2. Settle the open decisions above, especially the licence.
-3. Start M1 with the frame-handoff spike, then write its design record before any further M1 code.
+3. Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md), then run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) and accept its ADR before planning M1d–M1f.
