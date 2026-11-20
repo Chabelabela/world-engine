@@ -1,0 +1,10 @@
+[package]
+name = "we-planet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Deterministic planet terrain and climate for World Engine"
+
+[dependencies]
+glam.workspace = true
+we-frames.workspace = true
