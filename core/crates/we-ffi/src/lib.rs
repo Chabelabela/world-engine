@@ -4,6 +4,16 @@
 //! - Bump `WE_ABI_VERSION` on any signature or semantic change.
 //! - Never let a panic cross the boundary: wrap work in `guard`.
 //! - Return `i32` status codes (`WE_OK` or a negative `WE_ERR_*`).
+//!
+//! Threading and lifetime: a `WeUniverse` is **not** thread-safe. All calls on
+//! one handle must be externally serialized (the mod uses it from the server
+//! thread only), and nothing may call into a handle during or after
+//! `we_universe_free`.
+//!
+//! Panics: functions that can panic run inside `guard` and return
+//! `WE_ERR_PANIC`. Functions that cannot panic skip it; should one ever panic,
+//! Rust aborts at the `extern "C"` boundary (Rust >= 1.81) instead of unwinding
+//! into the JVM.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use we_orbit::CelestialSystem;
@@ -12,6 +22,7 @@ pub const WE_ABI_VERSION: u32 = 1;
 pub const WE_OK: i32 = 0;
 pub const WE_ERR_NULL: i32 = -1;
 pub const WE_ERR_BAD_INDEX: i32 = -2;
+pub const WE_ERR_INVALID: i32 = -3;
 pub const WE_ERR_PANIC: i32 = -99;
 
 /// Opaque handle owned by the Java side.
@@ -53,6 +64,7 @@ pub unsafe extern "C" fn we_universe_free(universe: *mut WeUniverse) {
 }
 
 /// Set the simulation time in seconds.
+/// Returns `WE_ERR_INVALID` for NaN or infinite times.
 ///
 /// # Safety
 /// `universe` must be null or a live pointer from `we_universe_new_demo`.
@@ -61,6 +73,9 @@ pub unsafe extern "C" fn we_universe_set_time(universe: *mut WeUniverse, seconds
     let Some(universe) = (unsafe { universe.as_mut() }) else {
         return WE_ERR_NULL;
     };
+    if !seconds.is_finite() {
+        return WE_ERR_INVALID;
+    }
     universe.time = seconds;
     WE_OK
 }
@@ -71,7 +86,7 @@ pub unsafe extern "C" fn we_universe_set_time(universe: *mut WeUniverse, seconds
 /// `universe` must be null or a live pointer from `we_universe_new_demo`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn we_universe_body_count(universe: *const WeUniverse) -> u32 {
-    unsafe { universe.as_ref() }.map_or(0, |u| u.system.len() as u32)
+    unsafe { universe.as_ref() }.map_or(0, |u| u32::try_from(u.system.len()).unwrap_or(u32::MAX))
 }
 
 /// Write the position (metres, Y-up, relative to the root body) of body
@@ -79,7 +94,7 @@ pub unsafe extern "C" fn we_universe_body_count(universe: *const WeUniverse) -> 
 ///
 /// # Safety
 /// `universe` must be null or a live pointer from `we_universe_new_demo`;
-/// `out_xyz` must be null or valid for writing 3 doubles.
+/// `out_xyz` must be null or valid for writing 3 doubles (24 bytes); it need not be aligned.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn we_universe_body_position(
     universe: *const WeUniverse,
@@ -98,14 +113,18 @@ pub unsafe extern "C" fn we_universe_body_position(
     }
     guard(|| {
         let p = universe.system.position_at(index, universe.time);
-        let out = unsafe { std::slice::from_raw_parts_mut(out_xyz, 3) };
-        out.copy_from_slice(&[p.x, p.y, p.z]);
+        for (i, v) in [p.x, p.y, p.z].into_iter().enumerate() {
+            unsafe { out_xyz.add(i).write_unaligned(v) };
+        }
         WE_OK
     })
 }
 
 /// Copy body `index`'s UTF-8 name (no terminator) into `buf`, truncated to
 /// `buf_len` bytes. Returns the full name length in bytes, or a `WE_ERR_*`.
+/// Truncation is byte-wise and may split a multi-byte UTF-8 sequence. To get the
+/// whole name, call again with a buffer of the returned length. Passing
+/// `buf = null, buf_len = 0` is a valid way to ask for the length.
 ///
 /// # Safety
 /// `universe` must be null or a live pointer from `we_universe_new_demo`;
@@ -133,7 +152,7 @@ pub unsafe extern "C" fn we_universe_body_name(
         if n > 0 {
             unsafe { std::ptr::copy_nonoverlapping(name.as_ptr(), buf, n) };
         }
-        name.len() as i32
+        i32::try_from(name.len()).unwrap_or(i32::MAX)
     })
 }
 
@@ -215,5 +234,75 @@ mod tests {
             assert_eq!(we_universe_set_time(std::ptr::null_mut(), 1.0), WE_ERR_NULL);
             assert_eq!(we_universe_body_count(std::ptr::null()), 0);
         }
+    }
+
+    #[test]
+    fn rejects_non_finite_time() {
+        let u = demo();
+        unsafe {
+            assert_eq!(we_universe_set_time(u.0, f64::NAN), WE_ERR_INVALID);
+            assert_eq!(we_universe_set_time(u.0, f64::INFINITY), WE_ERR_INVALID);
+        }
+    }
+
+    #[test]
+    fn position_changes_with_time() {
+        let u = demo();
+        let mut a = [0.0f64; 3];
+        let mut b = [0.0f64; 3];
+        unsafe {
+            assert_eq!(we_universe_set_time(u.0, 0.0), WE_OK);
+            assert_eq!(we_universe_body_position(u.0, 1, a.as_mut_ptr()), WE_OK);
+            assert_eq!(we_universe_set_time(u.0, 500.0), WE_OK);
+            assert_eq!(we_universe_body_position(u.0, 1, b.as_mut_ptr()), WE_OK);
+        }
+        let moved = ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
+        assert!(moved > 1_000.0, "moved {moved}");
+    }
+
+    #[test]
+    fn writes_position_through_unaligned_pointer() {
+        let u = demo();
+        let mut raw = [0u8; 32];
+        let out = raw.as_mut_ptr().wrapping_add(1) as *mut f64;
+        unsafe {
+            assert_eq!(we_universe_set_time(u.0, 500.0), WE_OK);
+            assert_eq!(we_universe_body_position(u.0, 1, out), WE_OK);
+        }
+        let p: Vec<f64> = (0..3)
+            .map(|i| unsafe { out.add(i).read_unaligned() })
+            .collect();
+        let d = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt();
+        assert!((d - 60_000.0).abs() < 1e-6, "distance {d}");
+    }
+
+    #[test]
+    fn name_probe_and_errors() {
+        let u = demo();
+        unsafe {
+            assert_eq!(we_universe_body_name(u.0, 1, std::ptr::null_mut(), 0), 4);
+            assert_eq!(
+                we_universe_body_name(u.0, 9, std::ptr::null_mut(), 0),
+                WE_ERR_BAD_INDEX
+            );
+            assert_eq!(
+                we_universe_body_name(std::ptr::null(), 0, std::ptr::null_mut(), 0),
+                WE_ERR_NULL
+            );
+            assert_eq!(
+                we_universe_body_name(u.0, 0, std::ptr::null_mut(), 8),
+                WE_ERR_NULL
+            );
+        }
+    }
+
+    #[test]
+    fn free_accepts_null() {
+        unsafe { we_universe_free(std::ptr::null_mut()) };
+    }
+
+    #[test]
+    fn guard_turns_panics_into_status() {
+        assert_eq!(guard(|| -> i32 { panic!("boom") }), WE_ERR_PANIC);
     }
 }

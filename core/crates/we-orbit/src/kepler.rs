@@ -18,7 +18,7 @@ pub fn solve_kepler(mean_anomaly: f64, eccentricity: f64) -> f64 {
         let f_prime = 1.0 - eccentricity * e_anom.cos();
         let step = f / f_prime;
         e_anom -= step;
-        if step.abs() < 1e-15 {
+        if step.abs() <= 4.0 * f64::EPSILON * e_anom.abs().max(1.0) {
             break;
         }
     }
@@ -56,6 +56,22 @@ impl KeplerOrbit {
             mean_anomaly_at_epoch: 0.0,
             epoch: 0.0,
         }
+    }
+
+    /// True when the elements describe a closed orbit this code can propagate:
+    /// finite values, `semi_major_axis > 0` and `0 <= eccentricity < 1`.
+    pub fn is_valid(&self) -> bool {
+        let angles = [
+            self.inclination,
+            self.longitude_of_ascending_node,
+            self.argument_of_periapsis,
+            self.mean_anomaly_at_epoch,
+            self.epoch,
+        ];
+        self.semi_major_axis.is_finite()
+            && self.semi_major_axis > 0.0
+            && (0.0..1.0).contains(&self.eccentricity)
+            && angles.iter().all(|v| v.is_finite())
     }
 
     /// Mean motion `n = sqrt(mu / a^3)`, radians per second.
@@ -196,5 +212,99 @@ mod tests {
         let (pos, vel) = orbit.state_at(MU, 10.0);
         let h = pos.cross(vel).normalize();
         assert!(h.y.abs() < 1e-12, "angular momentum {h:?}");
+    }
+
+    fn tilted_eccentric() -> KeplerOrbit {
+        KeplerOrbit {
+            eccentricity: 0.3,
+            inclination: 0.4,
+            longitude_of_ascending_node: 1.1,
+            argument_of_periapsis: 2.0,
+            mean_anomaly_at_epoch: 0.7,
+            ..KeplerOrbit::circular(60_000.0)
+        }
+    }
+
+    #[test]
+    fn velocity_matches_numerical_derivative() {
+        let orbit = tilted_eccentric();
+        let h = 0.01;
+        for i in 0..20 {
+            let t = i as f64 * 211.0;
+            let numeric = (orbit.position_at(MU, t + h) - orbit.position_at(MU, t - h)) / (2.0 * h);
+            let (_, analytic) = orbit.state_at(MU, t);
+            assert!(
+                (numeric - analytic).length() < 1e-6 * analytic.length(),
+                "t={t}"
+            );
+        }
+    }
+
+    #[test]
+    fn angular_momentum_is_conserved_with_expected_magnitude() {
+        let orbit = tilted_eccentric();
+        let expected = (MU * 60_000.0 * (1.0 - 0.3 * 0.3)).sqrt();
+        let (p0, v0) = orbit.state_at(MU, 0.0);
+        let h0 = p0.cross(v0);
+        assert!(rel_err(h0.length(), expected) < 1e-10);
+        for i in 1..20 {
+            let (p, v) = orbit.state_at(MU, i as f64 * 157.0);
+            assert!((p.cross(v) - h0).length() < 1e-9 * expected);
+        }
+    }
+
+    #[test]
+    fn periapsis_points_up_for_polar_orbit_with_quarter_turn_periapsis() {
+        // i = 90°, Ω = 0, ω = 90°: periapsis lies along +Y in the engine frame.
+        let orbit = KeplerOrbit {
+            eccentricity: 0.2,
+            inclination: PI / 2.0,
+            argument_of_periapsis: PI / 2.0,
+            ..KeplerOrbit::circular(20_000.0)
+        };
+        let p = orbit.position_at(MU, 0.0);
+        assert!(
+            (p - DVec3::new(0.0, 16_000.0, 0.0)).length() < 1e-9,
+            "{p:?}"
+        );
+    }
+
+    #[test]
+    fn ascending_node_rotates_angular_momentum() {
+        // Polar orbits: Ω = 0 gives h along +Z, Ω = 90° gives h along +X (engine frame).
+        for (node, expected) in [(0.0, DVec3::Z), (PI / 2.0, DVec3::X)] {
+            let orbit = KeplerOrbit {
+                inclination: PI / 2.0,
+                longitude_of_ascending_node: node,
+                ..KeplerOrbit::circular(13_430.0)
+            };
+            let (p, v) = orbit.state_at(MU, 30.0);
+            let h = p.cross(v).normalize();
+            assert!((h - expected).length() < 1e-12, "node={node} h={h:?}");
+        }
+    }
+
+    #[test]
+    fn validates_elements() {
+        assert!(KeplerOrbit::circular(1.0).is_valid());
+        let bad = [
+            KeplerOrbit {
+                eccentricity: 1.5,
+                ..KeplerOrbit::circular(1.0)
+            },
+            KeplerOrbit {
+                eccentricity: f64::NAN,
+                ..KeplerOrbit::circular(1.0)
+            },
+            KeplerOrbit::circular(0.0),
+            KeplerOrbit::circular(-5.0),
+            KeplerOrbit {
+                inclination: f64::INFINITY,
+                ..KeplerOrbit::circular(1.0)
+            },
+        ];
+        for orbit in bad {
+            assert!(!orbit.is_valid(), "{orbit:?}");
+        }
     }
 }

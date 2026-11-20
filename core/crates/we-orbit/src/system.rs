@@ -19,6 +19,8 @@ pub struct Body {
 }
 
 /// A hierarchy of bodies on Keplerian rails (patched-conics style).
+///
+/// Bodies keep insertion order, so a parent always has a lower index than its children and `position_at` always terminates.
 #[derive(Clone, Debug, Default)]
 pub struct CelestialSystem {
     bodies: Vec<Body>,
@@ -47,8 +49,16 @@ impl CelestialSystem {
         system
     }
 
+    fn check_body(name: &str, mu: f64, radius: f64) {
+        assert!(
+            mu.is_finite() && mu > 0.0 && radius.is_finite() && radius > 0.0,
+            "invalid body {name}: mu={mu}, radius={radius}"
+        );
+    }
+
     pub fn add_root(&mut self, name: &str, mu: f64, radius: f64) -> BodyId {
         assert!(self.bodies.is_empty(), "a system has exactly one root body");
+        Self::check_body(name, mu, radius);
         self.push(Body {
             name: name.to_owned(),
             mu,
@@ -67,6 +77,8 @@ impl CelestialSystem {
         orbit: KeplerOrbit,
     ) -> BodyId {
         assert!(parent < self.bodies.len(), "unknown parent body {parent}");
+        Self::check_body(name, mu, radius);
+        assert!(orbit.is_valid(), "invalid orbit for {name}: {orbit:?}");
         self.push(Body {
             name: name.to_owned(),
             mu,
@@ -146,5 +158,49 @@ mod tests {
         let mut system = CelestialSystem::new();
         system.add_root("star", 1.0, 1.0);
         system.add_orbiting("lost", 1.0, 1.0, 7, KeplerOrbit::circular(10.0));
+    }
+
+    #[test]
+    fn three_level_hierarchy_sums_positions() {
+        let mut system = CelestialSystem::new();
+        let star = system.add_root("star", 1.0e12, 50_000.0);
+        let planet = system.add_orbiting(
+            "planet",
+            1.0e9,
+            10_000.0,
+            star,
+            KeplerOrbit::circular(1.0e6),
+        );
+        let moon = system.add_orbiting(
+            "moon",
+            1.0e7,
+            2_000.0,
+            planet,
+            KeplerOrbit::circular(40_000.0),
+        );
+        let t = 1_234.0;
+        let expected = KeplerOrbit::circular(1.0e6).position_at(1.0e12, t)
+            + KeplerOrbit::circular(40_000.0).position_at(1.0e9, t);
+        assert!((system.position_at(moon, t) - expected).length() < 1e-6);
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid orbit")]
+    fn rejects_invalid_orbit() {
+        let mut system = CelestialSystem::new();
+        let home = system.add_root("home", 1.0, 1.0);
+        let bad = KeplerOrbit {
+            eccentricity: 1.5,
+            ..KeplerOrbit::circular(10.0)
+        };
+        system.add_orbiting("bad", 1.0, 1.0, home, bad);
+    }
+
+    #[test]
+    #[should_panic(expected = "exactly one root")]
+    fn rejects_second_root() {
+        let mut system = CelestialSystem::new();
+        system.add_root("a", 1.0, 1.0);
+        system.add_root("b", 1.0, 1.0);
     }
 }

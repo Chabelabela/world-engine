@@ -12,4 +12,5 @@ glam = "0.34"
 we-orbit = { path = "crates/we-orbit" }
 
 [profile.release]
+# Keep the default panic = "unwind": we-ffi's guard relies on catching panics.
 debug = "line-tables-only"
