@@ -8,4 +8,4 @@ pub mod kepler;
 pub mod system;
 
 pub use kepler::{KeplerOrbit, solve_kepler};
-pub use system::{Body, BodyId, CelestialSystem};
+pub use system::{Body, BodyId, CelestialSystem, Link, SystemError};
