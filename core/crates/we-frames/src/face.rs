@@ -3,6 +3,10 @@ use glam::DVec3;
 /// One of the six faces of a cube-sphere planet. The equatorial faces
 /// `E0..E3` run eastward (prograde), starting at +X. `North` is +Y (the spin
 /// axis) and `South` is −Y.
+///
+/// The discriminants 0–5 cross the C ABI (`we_terrain_columns` and later
+/// calls), so they are frozen: changing them requires bumping
+/// `WE_ABI_VERSION`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Face {
@@ -86,6 +90,16 @@ impl Face {
         Face::North,
         Face::South,
     ];
+
+    /// The face's C ABI index, 0–5.
+    pub fn index(self) -> u8 {
+        self as u8
+    }
+
+    /// The face with C ABI index `index`, or `None` if out of range.
+    pub fn from_index(index: u8) -> Option<Face> {
+        Face::ALL.get(usize::from(index)).copied()
+    }
 
     /// Outward normal in the planet body frame.
     pub fn normal(self) -> DVec3 {
@@ -380,5 +394,15 @@ mod tests {
         assert_eq!(Face::ALL.map(|f| f as u8), [0, 1, 2, 3, 4, 5]);
         assert_eq!(Edge::South as u8, 3);
         assert_eq!(Edge::West as u8, 0);
+    }
+
+    #[test]
+    fn indexes_round_trip_and_match_the_abi_numbering() {
+        for (i, face) in Face::ALL.into_iter().enumerate() {
+            assert_eq!(usize::from(face.index()), i);
+            assert_eq!(Face::from_index(face.index()), Some(face));
+        }
+        assert_eq!(Face::North.index(), 4);
+        assert_eq!(Face::from_index(6), None);
     }
 }
