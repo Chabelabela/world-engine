@@ -5,6 +5,9 @@
 //! - Never let a panic cross the boundary: wrap work in `guard`.
 //! - Return `i32` status codes (`WE_OK` or a negative `WE_ERR_*`).
 //!
+//! `we_terrain_columns` takes no handle and keeps no state: any number of
+//! threads may call it at once.
+//!
 //! Threading and lifetime: a `WeUniverse` is **not** thread-safe. All calls on
 //! one handle must be externally serialized (the mod uses it from the server
 //! thread only), and nothing may call into a handle during or after
@@ -15,10 +18,14 @@
 //! Rust aborts at the `extern "C"` boundary (Rust >= 1.81) instead of unwinding
 //! into the JVM.
 
+mod terrain;
+
+pub use terrain::we_terrain_columns;
+
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use we_orbit::{BodyId, CelestialSystem};
 
-pub const WE_ABI_VERSION: u32 = 1;
+pub const WE_ABI_VERSION: u32 = 2;
 pub const WE_OK: i32 = 0;
 pub const WE_ERR_NULL: i32 = -1;
 pub const WE_ERR_BAD_INDEX: i32 = -2;
@@ -31,7 +38,7 @@ pub struct WeUniverse {
     time: f64,
 }
 
-fn guard(f: impl FnOnce() -> i32) -> i32 {
+pub(crate) fn guard(f: impl FnOnce() -> i32) -> i32 {
     catch_unwind(AssertUnwindSafe(f)).unwrap_or(WE_ERR_PANIC)
 }
 
@@ -172,7 +179,7 @@ mod tests {
 
     #[test]
     fn reports_abi_version() {
-        assert_eq!(we_abi_version(), 1);
+        assert_eq!(we_abi_version(), 2);
     }
 
     #[test]

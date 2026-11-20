@@ -426,7 +426,9 @@ dependencies = [
 name = "we-ffi"
 version = "0.1.0"
 dependencies = [
+ "we-frames",
  "we-orbit",
+ "we-planet",
 ]
 
 [[package]]

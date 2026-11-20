@@ -10,4 +10,6 @@ name = "worldengine_core"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+we-frames.workspace = true
 we-orbit.workspace = true
+we-planet.workspace = true

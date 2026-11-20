@@ -30,3 +30,27 @@ fn java_call_sequence() {
         we_universe_free(universe);
     }
 }
+
+#[test]
+fn terrain_call_sequence() {
+    // One 16 x 16 chunk on the home planet's E0 face (16,384 cells).
+    let mut heights = [0i32; 256];
+    let mut biomes = [0u8; 256];
+    let status = unsafe {
+        we_terrain_columns(
+            42,
+            16_384,
+            0,
+            0,
+            8_192,
+            8_192,
+            16,
+            16,
+            heights.as_mut_ptr(),
+            biomes.as_mut_ptr(),
+        )
+    };
+    assert_eq!(status, WE_OK);
+    assert!(heights.iter().all(|h| (-320..=600).contains(h)));
+    assert!(biomes.iter().all(|b| *b <= 12));
+}
