@@ -48,7 +48,7 @@
 - Record: any loading screen (yes/no), frames with missing chunks, and network bytes in the 2 s after arrival.
 
 ### E2 — Momentum and look across a seam (supports M1e) · day 2
-- `/we spike seam` walks the player off a face edge (both face regions are laid out with `PlanetLayout` in the test world). It teleports them to `CubeSphere::fold`'s point, with velocity rotated by `QuarterTurns::apply` and yaw by `QuarterTurns::rotate_yaw`.
+- `/we spike seam` walks the player off a face edge (both face regions are laid out with `PlanetLayout` in the test world). It teleports them to `CubeSphere::fold`'s point, with the grid velocity (Minecraft's block-space motion) rotated by `QuarterTurns::apply` and yaw by `QuarterTurns::rotate_yaw`. `QuarterTurns` is exact only for grid quantities: grid lines kink at seams, so a physical velocity would have to cross through the body frame (see `Folded::turns`).
 - Record: whether a running jump crosses smoothly (video); position error compared with `fold` (should be 0); and any server-side movement-correction ("moved wrongly" / rubber-banding) messages.
 
 ### E3 — Ship rendering at a transform (Q2) · days 3–4
