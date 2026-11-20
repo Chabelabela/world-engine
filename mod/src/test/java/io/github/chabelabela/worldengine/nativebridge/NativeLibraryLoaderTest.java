@@ -34,7 +34,10 @@ class NativeLibraryLoaderTest {
     }
 
     @Test
-    void extractsBundledLibraryOnceAndLoadsIt(@TempDir Path cache) {
+    void extractsBundledLibraryOnceAndLoadsIt() {
+        // Not a @TempDir: the loaded library stays mapped for the JVM's lifetime,
+        // and Windows cannot delete a loaded DLL.
+        Path cache = Path.of(System.getProperty("worldengine.test.cacheDir", "build/test-native-cache"));
         Path first = NativeLibraryLoader.locate(cache);
         assertTrue(Files.isRegularFile(first));
         assertTrue(first.startsWith(cache));

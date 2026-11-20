@@ -45,7 +45,7 @@ def cargoBuild = tasks.register('cargoBuild', Exec) {
     workingDir = file('../core')
     commandLine 'cargo', 'build', '--release', '-p', 'we-ffi'
     inputs.dir(file('../core/crates'))
-    inputs.files(file('../core/Cargo.toml'), file('../core/Cargo.lock'))
+    inputs.files(file('../core/Cargo.toml'), file('../core/Cargo.lock'), file('../core/rust-toolchain.toml'))
     outputs.file(hostLibrary)
 }
 
@@ -77,6 +77,8 @@ test {
     dependsOn cargoBuild
     jvmArgs '--enable-native-access=ALL-UNNAMED'
     systemProperty 'worldengine.native.path', hostLibrary.absolutePath
+    inputs.file(hostLibrary).withPropertyName('nativeLibrary').withPathSensitivity(PathSensitivity.NONE)
+    systemProperty 'worldengine.test.cacheDir', layout.buildDirectory.dir('test-native-cache').get().asFile.absolutePath
 }
 
 loom {
@@ -89,6 +91,8 @@ loom {
     }
 }
 
-tasks.matching { it.name in ['runClient', 'runServer'] }.configureEach {
-    dependsOn cargoBuild
+tasks.configureEach {
+    if (name in ['runClient', 'runServer']) {
+        dependsOn cargoBuild
+    }
 }

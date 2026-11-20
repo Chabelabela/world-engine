@@ -36,17 +36,18 @@ public final class NativeLibraryLoader {
             byte[] bytes = in.readAllBytes();
             Path dir = cacheDir.resolve(shortSha256(bytes));
             Path target = dir.resolve(platform.libraryFileName());
-            if (!Files.exists(target)) {
+            if (!Files.exists(target) || Files.size(target) != bytes.length) {
                 Files.createDirectories(dir);
                 Path tmp = Files.createTempFile(dir, "extract", ".tmp");
-                Files.write(tmp, bytes);
                 try {
+                    Files.write(tmp, bytes);
                     Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
                 } catch (IOException e) {
-                    Files.deleteIfExists(tmp);
                     if (!Files.exists(target)) {
                         throw e; // a concurrent launch winning the race is fine; anything else is not
                     }
+                } finally {
+                    Files.deleteIfExists(tmp);
                 }
             }
             return target;

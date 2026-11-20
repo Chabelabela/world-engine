@@ -63,6 +63,12 @@ jobs:
       - name: Build and test the mod (bundles all platforms)
         working-directory: mod
         run: ./gradlew build -PnativesDir=../natives-all
+      - name: Check the jar bundles all 5 natives
+        working-directory: mod
+        run: |
+          jar=$(ls build/libs/world-engine-*.jar | grep -v -- -sources)
+          unzip -l "$jar" | grep 'natives/'
+          test "$(unzip -l "$jar" | grep -c 'natives/.*worldengine_core')" -eq 5
       - uses: actions/upload-artifact@v4
         with:
           name: world-engine-mod

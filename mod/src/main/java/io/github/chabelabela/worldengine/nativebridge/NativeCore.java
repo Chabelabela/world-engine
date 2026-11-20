@@ -94,7 +94,11 @@ public final class NativeCore {
         return new Universe(handle);
     }
 
-    /** Owns one native universe. Not thread-safe: use from the server thread only. */
+    /**
+     * Owns one native universe. Not thread-safe: create, use and close it on one
+     * thread (the server thread). It holds native memory, so always {@link #close()}
+     * it (the mod does this on server stop); there is no cleaner.
+     */
     public final class Universe implements AutoCloseable {
         private MemorySegment handle;
 

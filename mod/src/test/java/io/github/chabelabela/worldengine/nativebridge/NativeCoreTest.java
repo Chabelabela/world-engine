@@ -53,6 +53,13 @@ class NativeCoreTest {
     }
 
     @Test
+    void rejectsNonFiniteTime() {
+        try (NativeCore.Universe u = core.newDemoUniverse()) {
+            assertThrows(NativeCoreException.class, () -> u.setTime(Double.NaN));
+        }
+    }
+
+    @Test
     void rejectsUseAfterClose() {
         NativeCore.Universe u = core.newDemoUniverse();
         u.close();
