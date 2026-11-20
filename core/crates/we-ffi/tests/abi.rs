@@ -51,6 +51,10 @@ fn terrain_call_sequence() {
         )
     };
     assert_eq!(status, WE_OK);
-    assert!(heights.iter().all(|h| (-320..=600).contains(h)));
+    assert!(
+        heights
+            .iter()
+            .all(|h| (we_planet::MIN_HEIGHT as i32..=we_planet::MAX_HEIGHT as i32).contains(h))
+    );
     assert!(biomes.iter().all(|b| *b <= 12));
 }

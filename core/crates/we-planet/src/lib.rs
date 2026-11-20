@@ -18,4 +18,4 @@ mod terrain;
 pub use columns::{ColumnsError, MAX_COLUMNS, fill_columns};
 pub use hash::{hash3, layer_seed, mix};
 pub use noise::{fbm, gradient};
-pub use terrain::{Biome, Column, PlanetKind, Terrain};
+pub use terrain::{Biome, Column, MAX_HEIGHT, MIN_HEIGHT, PlanetKind, TERRAIN_VERSION, Terrain};

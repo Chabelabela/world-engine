@@ -20,6 +20,8 @@ pub enum ColumnsError {
 /// row-major (index `dz * count_x + dx`): the surface as whole blocks above
 /// the datum (`Column::height_block`) and the biome index.
 ///
+/// An empty region (a zero count) still has its position validated.
+///
 /// Pure and thread-safe: call it from as many world-generation threads as
 /// you like.
 #[allow(clippy::too_many_arguments)]

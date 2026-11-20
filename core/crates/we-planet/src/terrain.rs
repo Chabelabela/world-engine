@@ -79,6 +79,18 @@ impl Biome {
     }
 }
 
+/// Version of the terrain model's output for a given seed. It is part of the
+/// world format: bump it whenever `TERRAIN_GOLDEN` has to change.
+pub const TERRAIN_VERSION: u32 = 1;
+
+/// Guaranteed lower bound of [`Column::height`], in metres. M1d uses it to
+/// size the Minecraft level. The model's analytic range is about -348..660 m;
+/// `sample` clamps to these bounds.
+pub const MIN_HEIGHT: f64 = -400.0;
+/// Guaranteed upper bound of [`Column::height`], in metres. See
+/// [`MIN_HEIGHT`].
+pub const MAX_HEIGHT: f64 = 700.0;
+
 /// One terrain column.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Column {
@@ -101,13 +113,25 @@ impl Column {
 
 /// cos 4°: within this angle of a cube corner terrain is fully forced down.
 const CORNER_INNER_COS: f64 = 0.997_564_050_259_824_2;
-/// cos 8°: beyond this angle from every corner terrain is untouched.
-const CORNER_OUTER_COS: f64 = 0.990_268_068_741_570_4;
+/// cos 12°: beyond this angle from every corner terrain is untouched. The wide
+/// 4-12° blend keeps the corner oceans' slopes gentle.
+const CORNER_OUTER_COS: f64 = 0.978_147_600_733_805_7;
 /// Terrestrial terrain sinks to deep ocean at cube corners, where three seam
 /// overlap bands meet (ROADMAP §4.3; M1e keeps those spots unbuildable).
 pub const TERRESTRIAL_CORNER_FLOOR: f64 = -300.0;
 /// Barren worlds get a deep crater floor at cube corners instead.
 pub const BARREN_CORNER_FLOOR: f64 = -150.0;
+
+// Subtropical dry belt: moisture drops by up to DRY_BELT_PEAK around
+// |sin latitude| = DRY_BELT_CENTRE and fades to nothing DRY_BELT_HALF_WIDTH
+// away. Deserts also need temperature >= 22 C, which at sea level means
+// |sin latitude| <= ~0.35, so the centre sits a little below the real-world
+// 25 degrees (0.42) and the belt is wide enough to reach into the hot band.
+// Tuned (seeds 1..=8, 6x64x64 grid): desert is 3.7-7.5% of land per seed,
+// against 0.05-1.2% before. Only +, -, * and smoothstep: deterministic.
+const DRY_BELT_CENTRE: f64 = 0.4;
+const DRY_BELT_HALF_WIDTH: f64 = 0.25;
+const DRY_BELT_PEAK: f64 = 0.5;
 
 fn smoothstep(edge0: f64, edge1: f64, x: f64) -> f64 {
     let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
@@ -118,7 +142,7 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + t * (b - a)
 }
 
-/// 1 within 4° of a cube corner, 0 beyond 8° from every corner.
+/// 1 within 4° of a cube corner, 0 beyond 12° from every corner.
 fn corner_weight(dir: DVec3) -> f64 {
     // For a unit vector, the cosine of the angle to the nearest corner
     // direction (±1, ±1, ±1)/√3 is (|x| + |y| + |z|)/√3.
@@ -219,12 +243,22 @@ impl Terrain {
         // Small hills and dips everywhere.
         height += fbm(self.layer(3), p / 180.0, 3) * 10.0;
         height = lerp(height, TERRESTRIAL_CORNER_FLOOR, corner);
+        let height = height.clamp(MIN_HEIGHT, MAX_HEIGHT);
 
         let sin_latitude = dir.y;
         let temperature =
             28.0 - 50.0 * sin_latitude * sin_latitude - 18.0 * (height.max(0.0) / 1_000.0)
                 + 5.0 * fbm(self.layer(4), p / 5_000.0, 2);
-        let moisture = (0.5 + 0.6 * fbm(self.layer(5), p / 4_000.0, 3)).clamp(0.0, 1.0);
+        // Subtropical dry belt (the Sahara/Australia latitudes): a smooth bump
+        // in |sin latitude| that dries the air by up to DRY_BELT_PEAK.
+        let dry = DRY_BELT_PEAK
+            * (1.0
+                - smoothstep(
+                    0.0,
+                    DRY_BELT_HALF_WIDTH,
+                    (sin_latitude.abs() - DRY_BELT_CENTRE).abs(),
+                ));
+        let moisture = (0.5 + 0.6 * fbm(self.layer(5), p / 4_000.0, 3) - dry).clamp(0.0, 1.0);
         Column {
             height,
             temperature,
@@ -236,7 +270,7 @@ impl Terrain {
     fn barren(self, p: DVec3, corner: f64) -> Column {
         let mut height =
             fbm(self.layer(1), p / 1_500.0, 5) * 90.0 + fbm(self.layer(3), p / 120.0, 3) * 12.0;
-        height = lerp(height, BARREN_CORNER_FLOOR, corner);
+        height = lerp(height, BARREN_CORNER_FLOOR, corner).clamp(MIN_HEIGHT, MAX_HEIGHT);
         Column {
             height,
             temperature: -40.0,
@@ -252,7 +286,7 @@ mod tests {
     use we_frames::{Face, SurfacePoint};
 
     const SEED: u64 = 42;
-    const TERRAIN_GOLDEN: u64 = 0xc03c_eaa0_22c8_43dc;
+    const TERRAIN_GOLDEN: u64 = 0xec57_2523_bf30_e0f7;
 
     fn home() -> (CubeSphere, Terrain) {
         let sphere = CubeSphere::new(16_384);
@@ -308,14 +342,14 @@ mod tests {
     }
 
     #[test]
-    fn corner_bias_fades_out_by_eight_degrees() {
+    fn corner_bias_fades_out_by_twelve_degrees() {
         for face in Face::ALL {
             assert_eq!(corner_weight(face.normal()), 0.0);
         }
-        // 10 degrees from the (1,1,1) corner, towards +X.
+        // 14 degrees from the (1,1,1) corner, towards +X.
         let corner = DVec3::ONE.normalize();
-        let away = (corner * 10f64.to_radians().cos()
-            + DVec3::new(2.0, -1.0, -1.0).normalize() * 10f64.to_radians().sin())
+        let away = (corner * 14f64.to_radians().cos()
+            + DVec3::new(2.0, -1.0, -1.0).normalize() * 14f64.to_radians().sin())
         .normalize();
         assert_eq!(corner_weight(away), 0.0);
         assert_eq!(corner_weight(corner), 1.0);
@@ -357,7 +391,10 @@ mod tests {
         let mut biomes = std::collections::HashSet::new();
         for dir in planet_samples(sphere) {
             let column = terrain.sample(dir);
-            assert!((-320.0..=600.0).contains(&column.height), "{column:?}");
+            assert!(
+                (MIN_HEIGHT..=MAX_HEIGHT).contains(&column.height),
+                "{column:?}"
+            );
             assert!((0.0..=1.0).contains(&column.moisture));
             if !column.biome.is_water() {
                 land += 1;
@@ -415,7 +452,10 @@ mod tests {
         for dir in planet_samples(sphere) {
             let column = moon.sample(dir);
             assert_eq!(column.biome, Biome::Barren);
-            assert!((-160.0..=150.0).contains(&column.height), "{column:?}");
+            assert!(
+                (MIN_HEIGHT..=MAX_HEIGHT).contains(&column.height),
+                "{column:?}"
+            );
         }
         let corner = moon.sample(DVec3::ONE.normalize());
         assert!(corner.height <= BARREN_CORNER_FLOOR + 1e-9);
@@ -446,10 +486,65 @@ mod tests {
         assert_eq!(PlanetKind::from_index(2), None);
     }
 
+    /// Every seed's land share of `Desert`, plus all biomes, over the grid.
+    fn survey(seed: u64) -> (std::collections::HashMap<Biome, u32>, u32) {
+        let sphere = CubeSphere::new(16_384);
+        let terrain = Terrain::new(seed, PlanetKind::Terrestrial, sphere);
+        let mut counts = std::collections::HashMap::new();
+        let mut land = 0;
+        for dir in planet_samples(sphere) {
+            let biome = terrain.sample(dir).biome;
+            *counts.entry(biome).or_insert(0) += 1;
+            if !biome.is_water() {
+                land += 1;
+            }
+        }
+        (counts, land)
+    }
+
+    #[test]
+    fn heights_stay_within_the_guaranteed_bounds_for_many_seeds() {
+        for seed in 1..=8 {
+            for (kind, cells) in [
+                (PlanetKind::Terrestrial, 16_384),
+                (PlanetKind::Barren, 4_096),
+            ] {
+                let sphere = CubeSphere::new(cells);
+                let terrain = Terrain::new(seed, kind, sphere);
+                for dir in planet_samples(sphere) {
+                    let h = terrain.sample(dir).height;
+                    assert!(
+                        (MIN_HEIGHT..=MAX_HEIGHT).contains(&h),
+                        "{seed} {kind:?} {h}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_terrestrial_biome_appears_across_seeds() {
+        let mut seen = std::collections::HashSet::new();
+        for seed in 1..=8 {
+            let (counts, land) = survey(seed);
+            let desert = f64::from(counts.get(&Biome::Desert).copied().unwrap_or(0));
+            let share = desert / f64::from(land);
+            assert!(share >= 0.03, "seed {seed}: desert share of land {share}");
+            seen.extend(counts.keys().copied());
+        }
+        for biome in Biome::ALL {
+            assert!(
+                biome == Biome::Barren || seen.contains(&biome),
+                "{biome:?} never appears"
+            );
+        }
+    }
+
     /// FNV-1a over the exact bits of many columns of both planet kinds. A
     /// failure on one platform only means some maths differs there; terrain
     /// must be bit-identical everywhere (client LOD vs server chunks, worlds
-    /// moved between machines).
+    /// moved between machines). When the terrain model changes on purpose,
+    /// re-pin this and bump `TERRAIN_VERSION`.
     #[test]
     fn terrain_is_bit_identical_on_every_platform() {
         let (sphere, terrain) = home();

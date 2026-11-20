@@ -17,8 +17,10 @@ use we_planet::{MAX_COLUMNS, PlanetKind, Terrain, fill_columns};
 /// number of threads may call it at once.
 ///
 /// Returns `WE_OK`; `WE_ERR_NULL` for a null output with a non-empty region;
-/// or `WE_ERR_INVALID` for a bad face, kind or cell count, a region outside
-/// the face, or more than `we_planet::MAX_COLUMNS` columns.
+/// or `WE_ERR_INVALID` for a bad face, kind or cell count, `cells` above
+/// `i32::MAX` (`x0`/`z0` are `i32`), a region outside the face, or more than
+/// `we_planet::MAX_COLUMNS` columns. An empty region (a zero count) still has
+/// its position validated.
 ///
 /// # Safety
 /// `out_heights` must be valid for writing `count_x * count_z` `i32`s, and
@@ -48,7 +50,7 @@ pub unsafe extern "C" fn we_terrain_columns(
     ) else {
         return WE_ERR_INVALID;
     };
-    if total > MAX_COLUMNS {
+    if total > MAX_COLUMNS || cells > i32::MAX as u32 {
         return WE_ERR_INVALID;
     }
     guard(|| {
@@ -180,6 +182,38 @@ mod tests {
             WE_OK,
             "empty"
         );
+    }
+
+    #[test]
+    fn face_edge_is_valid_and_one_past_is_not() {
+        let count = 4;
+        let edge = (HOME_CELLS - count) as i32;
+        assert_eq!(call(0, edge, edge, count, count).0, WE_OK);
+        assert_eq!(call(0, edge + 1, 0, count, count).0, WE_ERR_INVALID);
+        assert_eq!(call(0, 0, edge + 1, count, count).0, WE_ERR_INVALID);
+        // Empty regions are still position-checked.
+        assert_eq!(call(0, HOME_CELLS as i32 + 1, 0, 0, 3).0, WE_ERR_INVALID);
+    }
+
+    #[test]
+    fn cells_beyond_i32_are_invalid() {
+        let mut h = [0i32; 1];
+        let mut b = [0u8; 1];
+        let status = unsafe {
+            we_terrain_columns(
+                1,
+                i32::MAX as u32 + 1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                1,
+                h.as_mut_ptr(),
+                b.as_mut_ptr(),
+            )
+        };
+        assert_eq!(status, WE_ERR_INVALID);
     }
 
     #[test]
