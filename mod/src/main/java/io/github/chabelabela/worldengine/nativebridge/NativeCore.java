@@ -14,6 +14,7 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Java view of the Rust core's C ABI ({@code core/crates/we-ffi/src/lib.rs}).
@@ -22,6 +23,9 @@ import java.nio.file.Path;
  */
 public final class NativeCore {
     public static final int EXPECTED_ABI_VERSION = 2;
+
+    /** Largest region {@link #terrainColumns} accepts, in columns. */
+    public static final int MAX_COLUMNS = 1 << 20; // keep equal to we_planet::MAX_COLUMNS
 
     private final MethodHandle abiVersionFn;
     private final MethodHandle newDemoFn;
@@ -85,6 +89,9 @@ public final class NativeCore {
     }
 
     private static NativeCoreException wrap(Throwable t) {
+        if (t instanceof Error e) {
+            throw e; // OutOfMemoryError, StackOverflowError etc. must not be disguised
+        }
         return t instanceof NativeCoreException e ? e : new NativeCoreException("Native call failed", t);
     }
 
@@ -112,18 +119,22 @@ public final class NativeCore {
      */
     public TerrainColumns terrainColumns(
             long seed, int cells, PlanetKind kind, int face, int x0, int z0, int countX, int countZ) {
+        Objects.requireNonNull(kind, "kind");
+        if (countX < 0 || countZ < 0) {
+            throw new NativeCoreException("Negative region size " + countX + " x " + countZ);
+        }
+        long n = (long) countX * countZ;
+        if (n > MAX_COLUMNS) {
+            throw new NativeCoreException("Region of " + n + " columns exceeds " + MAX_COLUMNS);
+        }
         try (Arena arena = Arena.ofConfined()) {
-            if (countX < 0 || countZ < 0) {
-                throw new NativeCoreException("Negative region size " + countX + " x " + countZ);
-            }
-            int n = Math.multiplyExact(countX, countZ);
-            MemorySegment heights = arena.allocate(JAVA_INT, Math.max(n, 1));
-            MemorySegment biomes = arena.allocate(JAVA_BYTE, Math.max(n, 1));
+            MemorySegment heights = arena.allocate(JAVA_INT, Math.max((int) n, 1));
+            MemorySegment biomes = arena.allocate(JAVA_BYTE, Math.max((int) n, 1));
             check((int) terrainColumnsFn.invokeExact(
                     seed, cells, kind.id(), face, x0, z0, countX, countZ, heights, biomes),
                     "we_terrain_columns");
             return new TerrainColumns(countX, countZ,
-                    heights.asSlice(0, (long) n * Integer.BYTES).toArray(JAVA_INT),
+                    heights.asSlice(0, n * Integer.BYTES).toArray(JAVA_INT),
                     biomes.asSlice(0, n).toArray(JAVA_BYTE));
         } catch (Throwable t) {
             throw wrap(t);
