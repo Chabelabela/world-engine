@@ -14,6 +14,7 @@ import io.github.chabelabela.worldengine.planet.TerrainStamp;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -50,8 +51,9 @@ import net.minecraft.world.level.storage.SavedDataStorage;
 public class UniverseGameTests {
     private static final ResourceKey<WorldPreset> PRESET =
             ResourceKey.create(Registries.WORLD_PRESET, WorldEngineMod.id("universe"));
-    /** Columns on several faces of the home planet, and one on the moon. */
-    private static final int[][] COLUMNS = {{3, 5}, {1_234, -4_321}, {-7_000, 6_000}, {9_000, -9_000}, {106_100, 40}};
+    /** A column on each face of the home planet (E1, E0, E2, E3, North, South), and one on the moon. */
+    private static final int[][] COLUMNS = {
+        {3, 5}, {-9_000, 1_234}, {9_000, -4_321}, {30_000, 2_000}, {100, -9_000}, {-200, 9_500}, {106_100, 40}};
 
     @GameTest
     public void worldTypeIsRegistered(GameTestHelper helper) {
@@ -107,7 +109,7 @@ public class UniverseGameTests {
         for (LevelChunkSection section : chunk.getSections()) {
             check(helper, section.hasOnlyAir(), "no blocks in space");
         }
-        check(helper, chunk.getNoiseBiome(QuartPos.fromBlock(x), 0, QuartPos.fromBlock(z)).is(biome(BiomeTable.VOID)),
+        check(helper, noiseBiome(chunk, QuartPos.fromBlock(x), 0, QuartPos.fromBlock(z)).is(biome(BiomeTable.VOID)),
                 "space is the void biome");
         helper.succeed();
     }
@@ -122,7 +124,7 @@ public class UniverseGameTests {
             PlanetHit hit = Planets.at(QuartPos.toBlock(qx) + 2, QuartPos.toBlock(qz) + 2);
             String expected = BiomeTable.biomeId(PlanetTerrain.column(hit, u.seed()).biome(0, 0));
             ProtoChunk chunk = u.generate(new ChunkPos(c[0] >> 4, c[1] >> 4));
-            check(helper, chunk.getNoiseBiome(qx, qy, qz).is(biome(expected)),
+            check(helper, noiseBiome(chunk, qx, qy, qz).is(biome(expected)),
                     "chunk biome at (" + c[0] + ", " + c[1] + ") is " + expected);
             Holder<Biome> direct = u.generator().getBiomeSource().createUncachedResolver(u.randomState())
                     .getNoiseBiome(qx, qy, qz);
@@ -139,6 +141,24 @@ public class UniverseGameTests {
         check(helper, hit != null && hit.planet() == Planets.HOME, "the spawn chunk is on the home planet");
         int height = PlanetTerrain.column(hit, u.seed()).height(0, 0);
         check(helper, height >= 1, "the spawn column is dry land, got " + height + " m");
+        helper.succeed();
+    }
+
+    @GameTest
+    public void generationIsFastEnough(GameTestHelper helper) {
+        Universe u = universe(helper);
+        for (int i = 0; i < 4; i++) {
+            u.generate(new ChunkPos(100 + i, 0)); // warm up
+        }
+        int chunks = 64;
+        long start = System.nanoTime();
+        for (int i = 0; i < chunks; i++) {
+            u.generate(new ChunkPos(i % 8, i / 8));
+        }
+        double ms = (System.nanoTime() - start) / 1e6 / chunks;
+        WorldEngineMod.LOGGER.info("GameTest: biomes + terrain took {} ms per chunk", String.format(Locale.ROOT, "%.2f", ms));
+        // Generous, to stay reliable on shared CI machines; vanilla's noise generator takes a few ms per chunk.
+        check(helper, ms < 25, "biomes + terrain took " + ms + " ms per chunk");
         helper.succeed();
     }
 
@@ -183,6 +203,12 @@ public class UniverseGameTests {
         RandomState randomState = level.getChunkSource().randomState();
         generator.createState(registries.lookupOrThrow(Registries.STRUCTURE_SET), randomState, randomState.seed());
         return new Universe(generator, randomState, level);
+    }
+
+    /** The biome stored for a quart. Read from the section: a stand-alone chunk has no generation status. */
+    private static Holder<Biome> noiseBiome(ProtoChunk chunk, int quartX, int quartY, int quartZ) {
+        LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(QuartPos.toBlock(quartY)));
+        return section.getNoiseBiome(quartX & 3, quartY & 3, quartZ & 3);
     }
 
     private static ResourceKey<Biome> biome(String id) {

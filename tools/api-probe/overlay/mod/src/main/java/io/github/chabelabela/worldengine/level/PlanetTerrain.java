@@ -43,7 +43,7 @@ public final class PlanetTerrain {
         long seed = planet.seed(worldSeed);
         return SpawnSearch.findLandChunk(planet, (face, x, z) ->
                 core.terrainColumns(seed, planet.cells(), planet.kind(), face.id(), x, z, 1, 1).height(0, 0),
-                SpawnSearch.MAX_RADIUS_CHUNKS);
+                SpawnSearch.MAX_RADIUS_STEPS);
     }
 
     static NativeCore core() {
