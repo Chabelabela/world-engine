@@ -12,6 +12,8 @@
 
 mod hash;
 mod noise;
+mod terrain;
 
 pub use hash::{hash3, layer_seed, mix};
 pub use noise::{fbm, gradient};
+pub use terrain::{Biome, Column, PlanetKind, Terrain};
