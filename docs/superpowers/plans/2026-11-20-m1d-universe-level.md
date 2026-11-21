@@ -36,6 +36,14 @@
   - The World Engine world type on the client's Create World screen, how the terrain looks, and generation speed in play. Task 11 lists the manual checks.
   - The in-between states of `WorldEngineMod.java` after Tasks 7 and 8 were not compiled on their own; Task 9 replaces the whole file with the CI-built version.
 
+**Post-execution note (2026-11-21):** executed with Haiku implementers and Sonnet reviewers. Every task's files matched the CI-verified reference byte for byte; CI is green on all jobs, and the GameTests ran in the `mod` job (4.3 ms per chunk). One review follow-up commit (`b2fd564`) then changed a few lines, so **the repository, not these code blocks, is authoritative**:
+- `ColumnMaterials`: a top block counts as under water only on planets with oceans.
+- `PlanetTerrain.landChunk`: native failures are rethrown with the planet's name.
+- `checkWorldStamp`: a failing stamp check is logged instead of thrown, so a corrupt stamp file can't stop server start. The crash-on-failure policy still holds for world generation.
+- `/worldengine goto`: lands on `MOTION_BLOCKING_NO_LEAVES`, not on treetops.
+- `/worldengine where`: says "layout only" outside universe worlds.
+- Tests: face ids pinned to the ABI, invariants checked at the height extremes, a moon spawn-search test, tighter level margins, the seed included in GameTest failure messages, the speed limit raised to 50 ms per chunk, and the temporary stamp directory cleaned up.
+
 **Environment note:** without JDK 25 (as in Claude cloud sessions), skip the `./gradlew` steps and rely on CI (Task 11). Don't download JDKs. Rust steps always run locally. The pure-Java tests (Tasks 2–6) can also be run on any JDK ≥ 21 with the JUnit console launcher, as was done here.
 
 ---
@@ -2679,6 +2687,13 @@ git push
 - **No caves or carvers.** Vanilla features (trees, ores, springs) and structures come through the biomes. A structure that crosses a face edge is cut off.
 - **The Nether and End are vanilla.** Portals still link to them.
 - **Speed:** biomes plus terrain take about 9 ms per chunk on a CI machine, measured on one thread; Minecraft generates several chunks at once on its worker threads. If the manual check (Task 11) finds generation slow, the first fix is to fill all-stone sections in one step (`new LevelChunkSection(PalettedContainer, PalettedContainerRO)`) instead of block by block. Updating heightmaps only at the top of each column made no measurable difference.
+
+## Changing the terrain model later
+
+1. Change `we-planet`. The golden-hash test fails; re-pin `TERRAIN_GOLDEN`.
+2. Bump `TERRAIN_VERSION` (`core/crates/we-planet/src/terrain.rs`). `NativeCoreTest.reportsTerrainVersion` pins the number, so update it too.
+3. Existing universe worlds then log the stamp warning on every start, because new chunks won't line up with old ones at their borders. Players either keep the world (accepting seams where old and new chunks meet) or start a new one.
+4. A re-stamp or migration path (a command, or per-chunk versions) is future work, to be decided before the first public release.
 
 ## 26.3 API notes (found with `javap` on the 26.3 jar)
 
