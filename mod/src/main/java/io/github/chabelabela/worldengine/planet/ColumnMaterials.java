@@ -34,7 +34,7 @@ public final class ColumnMaterials {
         }
         int depth = surface - y;
         if (depth == 0) {
-            return top(biome, height < 0);
+            return top(biome, hasOceans(kind) && height < 0);
         }
         if (depth <= SUBSOIL_DEPTH) {
             return subsoil(biome);

@@ -71,8 +71,10 @@ final class WorldEngineCommands {
         }
         TerrainColumns column = PlanetTerrain.column(hit, source.getLevel().getSeed());
         FaceCell cell = hit.cell();
-        reply(source, String.format(Locale.ROOT, "(%d, %d): %s, face %s, cell (%d, %d), %d m, %s",
-                x, z, hit.planet().name(), cell.face(), cell.x(), cell.z(), column.height(0, 0), column.biome(0, 0)));
+        String note = source.getServer().overworld().getChunkSource().getGenerator() instanceof UniverseChunkGenerator
+                ? "" : " (layout only: this world isn't a World Engine universe)";
+        reply(source, String.format(Locale.ROOT, "(%d, %d): %s, face %s, cell (%d, %d), %d m, %s%s",
+                x, z, hit.planet().name(), cell.face(), cell.x(), cell.z(), column.height(0, 0), column.biome(0, 0), note));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -93,7 +95,7 @@ final class WorldEngineCommands {
         int x = chunk[0] * 16 + 8;
         int z = chunk[1] * 16 + 8;
         level.getChunk(chunk[0], chunk[1]);
-        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         player.teleportTo(level, x + 0.5, y, z + 0.5, Set.of(), player.getYRot(), player.getXRot(), true);
         reply(source, String.format(Locale.ROOT, "Sent to %s at (%d, %d, %d)", planet.name(), x, y, z));
         return Command.SINGLE_SUCCESS;

@@ -15,8 +15,8 @@ import org.junit.jupiter.api.Test;
 class LevelShapeTest {
     @Test
     void coversTheTerrainRangeWithRoomToSpare() {
-        assertTrue(LevelShape.surfaceY(TerrainColumns.MIN_HEIGHT) - LevelShape.MIN_Y >= 32, "rock under the deepest sea");
-        assertTrue(LevelShape.maxY() - LevelShape.surfaceY(TerrainColumns.MAX_HEIGHT) >= 100, "air over the highest peak");
+        assertTrue(LevelShape.surfaceY(TerrainColumns.MIN_HEIGHT) - LevelShape.MIN_Y >= 46, "rock under the deepest sea");
+        assertTrue(LevelShape.maxY() - LevelShape.surfaceY(TerrainColumns.MAX_HEIGHT) >= 133, "air over the highest peak");
         assertEquals(0, LevelShape.MIN_Y % 16);
         assertEquals(0, LevelShape.HEIGHT % 16);
         assertTrue(LevelShape.MIN_Y + LevelShape.HEIGHT <= 2_032, "vanilla's dimension height limit");

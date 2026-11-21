@@ -36,8 +36,12 @@ class SpawnSearchTest {
     }
 
     @Test
-    void sampledCellsAreOnThePlanet() {
-        int[] moon = SpawnSearch.findLandChunk(Planets.MOON, (f, x, z) -> 2, 2);
-        assertArrayEquals(new int[] {Math.floorDiv(Planets.MOON.centreX(), 16), Math.floorDiv(Planets.MOON.centreZ(), 16)}, moon);
+    void searchesTheMoonsNetToo() {
+        // The moon's E1 centre (cell 2,048) is block x = 106,144, a multiple of 16, so chunk 6,634. Land only
+        // from cell 2,248 (200 blocks east) on face E1. Samples sit at cell 2,048 + 8 + 64 * step, so the first
+        // on land is step 3 (cell 2,248), in ring 3 (ring 2 reaches only cell 2,184). The ring is scanned row
+        // by row from its north edge, so the first hit is step (3, -3): chunk (6,634 + 12, -12).
+        SpawnSearch.Heights eastIsLand = (face, x, z) -> face == PlanetFace.E1 && x >= 2_248 ? 3 : -10;
+        assertArrayEquals(new int[] {6_646, -12}, SpawnSearch.findLandChunk(Planets.MOON, eastIsLand, 8));
     }
 }

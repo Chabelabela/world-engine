@@ -41,9 +41,13 @@ public final class PlanetTerrain {
     public static int[] landChunk(PlanetSpec planet, long worldSeed) {
         NativeCore core = core();
         long seed = planet.seed(worldSeed);
-        return SpawnSearch.findLandChunk(planet, (face, x, z) ->
-                core.terrainColumns(seed, planet.cells(), planet.kind(), face.id(), x, z, 1, 1).height(0, 0),
-                SpawnSearch.MAX_RADIUS_STEPS);
+        try {
+            return SpawnSearch.findLandChunk(planet, (face, x, z) ->
+                    core.terrainColumns(seed, planet.cells(), planet.kind(), face.id(), x, z, 1, 1).height(0, 0),
+                    SpawnSearch.MAX_RADIUS_STEPS);
+        } catch (NativeCoreException e) {
+            throw new IllegalStateException("World Engine terrain failed while looking for land on " + planet.name(), e);
+        }
     }
 
     static NativeCore core() {

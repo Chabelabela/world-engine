@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import io.github.chabelabela.worldengine.nativebridge.PlanetBiome;
+import io.github.chabelabela.worldengine.nativebridge.PlanetKind;
+import io.github.chabelabela.worldengine.nativebridge.TerrainColumns;
 import org.junit.jupiter.api.Test;
 
 class ColumnMaterialsTest {
@@ -37,6 +39,26 @@ class ColumnMaterialsTest {
     void grassUnderWaterBecomesDirt() {
         assertEquals(Ground.DIRT, ColumnMaterials.at(61, -1, PlanetBiome.PLAINS, TERRESTRIAL));
         assertEquals(Ground.WATER, ColumnMaterials.at(62, -1, PlanetBiome.PLAINS, TERRESTRIAL));
+    }
+
+    @Test
+    void grassStaysGrassWithoutOceans() {
+        assertEquals(Ground.GRASS, ColumnMaterials.at(LevelShape.surfaceY(-5), -5, PlanetBiome.PLAINS, BARREN));
+    }
+
+    @Test
+    void topAndAirAgreeAtTheExtremes() {
+        int[] heights = {TerrainColumns.MIN_HEIGHT, -1, 0, 1, TerrainColumns.MAX_HEIGHT};
+        for (PlanetKind kind : PlanetKind.values()) {
+            PlanetBiome biome = kind == TERRESTRIAL ? PlanetBiome.PLAINS : PlanetBiome.BARREN;
+            for (int h : heights) {
+                int topY = ColumnMaterials.topY(h, kind);
+                String what = kind + " at height " + h;
+                assertNotEquals(Ground.AIR, ColumnMaterials.at(topY, h, biome, kind), what);
+                assertEquals(Ground.AIR, ColumnMaterials.at(topY + 1, h, biome, kind), what);
+                assertEquals(Ground.BEDROCK, ColumnMaterials.at(LevelShape.MIN_Y, h, biome, kind), what);
+            }
+        }
     }
 
     @Test

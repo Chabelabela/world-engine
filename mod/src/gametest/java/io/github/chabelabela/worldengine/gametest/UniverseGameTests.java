@@ -14,8 +14,10 @@ import io.github.chabelabela.worldengine.planet.TerrainStamp;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Stream;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -84,7 +86,7 @@ public class UniverseGameTests {
                 BlockPos pos = new BlockPos(c[0], y, c[1]);
                 if (chunk.getBlockState(pos) != expected.getBlock(y)) {
                     helper.fail("block at y " + y + " of " + where + " is " + chunk.getBlockState(pos)
-                            + ", expected " + expected.getBlock(y));
+                            + ", expected " + expected.getBlock(y) + " (seed " + u.seed() + ")");
                 }
             }
             check(helper, chunk.getBlockState(new BlockPos(c[0], LevelShape.MIN_Y, c[1])).is(Blocks.BEDROCK),
@@ -138,9 +140,9 @@ public class UniverseGameTests {
         Universe u = universe(helper);
         ChunkPos origin = u.generator().getOrigin(u.randomState());
         PlanetHit hit = Planets.at(origin.getMinBlockX() + 8, origin.getMinBlockZ() + 8);
-        check(helper, hit != null && hit.planet() == Planets.HOME, "the spawn chunk is on the home planet");
+        check(helper, hit != null && hit.planet() == Planets.HOME, "the spawn chunk is on the home planet (seed " + u.seed() + ")");
         int height = PlanetTerrain.column(hit, u.seed()).height(0, 0);
-        check(helper, height >= 1, "the spawn column is dry land, got " + height + " m");
+        check(helper, height >= 1, "the spawn column is dry land, got " + height + " m (seed " + u.seed() + ")");
         helper.succeed();
     }
 
@@ -157,8 +159,9 @@ public class UniverseGameTests {
         }
         double ms = (System.nanoTime() - start) / 1e6 / chunks;
         WorldEngineMod.LOGGER.info("GameTest: biomes + terrain took {} ms per chunk", String.format(Locale.ROOT, "%.2f", ms));
-        // Generous, to stay reliable on shared CI machines; vanilla's noise generator takes a few ms per chunk.
-        check(helper, ms < 25, "biomes + terrain took " + ms + " ms per chunk");
+        // Generous: it catches order-of-magnitude regressions on shared CI runners; vanilla's noise generator
+        // takes a few ms per chunk.
+        check(helper, ms < 50, "biomes + terrain took " + ms + " ms per chunk");
         helper.succeed();
     }
 
@@ -166,17 +169,36 @@ public class UniverseGameTests {
     public void worldStampSurvivesASave(GameTestHelper helper) throws IOException {
         ServerLevel level = helper.getLevel();
         Path dir = Files.createTempDirectory("worldengine-stamp");
-        try (SavedDataStorage storage = new SavedDataStorage(dir, level.getServer().getFixerUpper(), level.registryAccess())) {
-            check(helper, storage.computeIfAbsent(WorldStamp.TYPE).reconcile(new TerrainStamp(1, 3)) == null,
-                    "a new world is stamped without a warning");
-            storage.saveAndJoin();
-        }
-        try (SavedDataStorage storage = new SavedDataStorage(dir, level.getServer().getFixerUpper(), level.registryAccess())) {
-            WorldStamp stamp = storage.computeIfAbsent(WorldStamp.TYPE);
-            check(helper, stamp.stamp().equals(new TerrainStamp(1, 3)), "the stamp was saved, got " + stamp.stamp());
-            check(helper, stamp.reconcile(new TerrainStamp(2, 3)) != null, "a newer terrain version warns");
+        try {
+            try (SavedDataStorage storage = new SavedDataStorage(dir, level.getServer().getFixerUpper(), level.registryAccess())) {
+                check(helper, storage.computeIfAbsent(WorldStamp.TYPE).reconcile(new TerrainStamp(1, 3)) == null,
+                        "a new world is stamped without a warning");
+                storage.saveAndJoin();
+            }
+            try (SavedDataStorage storage = new SavedDataStorage(dir, level.getServer().getFixerUpper(), level.registryAccess())) {
+                WorldStamp stamp = storage.computeIfAbsent(WorldStamp.TYPE);
+                check(helper, stamp.stamp().equals(new TerrainStamp(1, 3)), "the stamp was saved, got " + stamp.stamp());
+                check(helper, stamp.reconcile(new TerrainStamp(2, 3)) != null, "a newer terrain version warns");
+            }
+        } finally {
+            deleteQuietly(dir);
         }
         helper.succeed();
+    }
+
+    /** Deletes a directory tree, ignoring errors: it is only a test's scratch space. */
+    private static void deleteQuietly(Path dir) {
+        try (Stream<Path> paths = Files.walk(dir)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.delete(p);
+                } catch (IOException ignored) {
+                    // best effort
+                }
+            });
+        } catch (IOException ignored) {
+            // best effort
+        }
     }
 
     /** The universe preset's generator, bound to the test world's seed as a real level would bind it. */

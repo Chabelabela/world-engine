@@ -21,6 +21,20 @@ class PlanetLayoutTest {
     }
 
     @Test
+    void faceIdsAreTheAbiNumbering() {
+        // These ids cross the native ABI and match we_frames::Face.
+        assertEquals(0, PlanetFace.E0.id());
+        assertEquals(1, PlanetFace.E1.id());
+        assertEquals(2, PlanetFace.E2.id());
+        assertEquals(3, PlanetFace.E3.id());
+        assertEquals(4, PlanetFace.NORTH.id());
+        assertEquals(5, PlanetFace.SOUTH.id());
+        for (int i = 0; i < 6; i++) {
+            assertEquals(i, PlanetFace.fromId(i).id());
+        }
+    }
+
+    @Test
     void outsideTheNetIsNoFace() {
         int ox = LAYOUT.originX();
         int oz = LAYOUT.originZ();

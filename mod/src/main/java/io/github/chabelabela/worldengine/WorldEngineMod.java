@@ -80,10 +80,14 @@ public final class WorldEngineMod implements ModInitializer {
         if (!(overworld.getChunkSource().getGenerator() instanceof UniverseChunkGenerator)) {
             return;
         }
-        TerrainStamp current = new TerrainStamp(core.terrainVersion(), core.abiVersion());
-        String warning = overworld.getDataStorage().computeIfAbsent(WorldStamp.TYPE).reconcile(current);
-        if (warning != null) {
-            LOGGER.warn(warning);
+        try {
+            TerrainStamp current = new TerrainStamp(core.terrainVersion(), core.abiVersion());
+            String warning = overworld.getDataStorage().computeIfAbsent(WorldStamp.TYPE).reconcile(current);
+            if (warning != null) {
+                LOGGER.warn(warning);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.error("World Engine could not check this world's terrain stamp", e);
         }
     }
 
