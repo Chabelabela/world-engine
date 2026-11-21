@@ -4,11 +4,13 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import io.github.chabelabela.worldengine.level.UniverseBiomeSource;
 import io.github.chabelabela.worldengine.level.UniverseChunkGenerator;
+import io.github.chabelabela.worldengine.level.WorldStamp;
 import io.github.chabelabela.worldengine.nativebridge.NativeCore;
 import io.github.chabelabela.worldengine.nativebridge.NativeCoreException;
 import io.github.chabelabela.worldengine.nativebridge.NativeLibraryLoader;
 import io.github.chabelabela.worldengine.nativebridge.PlanetKind;
 import io.github.chabelabela.worldengine.nativebridge.TerrainColumns;
+import io.github.chabelabela.worldengine.planet.TerrainStamp;
 import java.nio.file.Path;
 import java.util.Locale;
 import net.fabricmc.api.ModInitializer;
@@ -21,6 +23,8 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +57,7 @@ public final class WorldEngineMod implements ModInitializer {
         core = loaded;
         if (loaded != null) {
             ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+                checkWorldStamp(server, loaded);
                 if (universe != null) {
                     universe.close(); // only if a stop event was ever missed
                     universe = null;
@@ -82,6 +87,19 @@ public final class WorldEngineMod implements ModInitializer {
                                                                 IntegerArgumentType.getInteger(context, "face"),
                                                                 IntegerArgumentType.getInteger(context, "x"),
                                                                 IntegerArgumentType.getInteger(context, "z")))))))));
+    }
+
+    /** Records the terrain version in a new universe world, and warns if an old world's differs. */
+    private static void checkWorldStamp(MinecraftServer server, NativeCore core) {
+        ServerLevel overworld = server.overworld();
+        if (!(overworld.getChunkSource().getGenerator() instanceof UniverseChunkGenerator)) {
+            return;
+        }
+        TerrainStamp current = new TerrainStamp(core.terrainVersion(), core.abiVersion());
+        String warning = overworld.getDataStorage().computeIfAbsent(WorldStamp.TYPE).reconcile(current);
+        if (warning != null) {
+            LOGGER.warn(warning);
+        }
     }
 
     /** Loads the Rust core, or logs why it can't and returns null so the game still starts. */
