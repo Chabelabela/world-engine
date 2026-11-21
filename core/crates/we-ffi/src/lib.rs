@@ -20,12 +20,12 @@
 
 mod terrain;
 
-pub use terrain::we_terrain_columns;
+pub use terrain::{we_terrain_columns, we_terrain_version};
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use we_orbit::{BodyId, CelestialSystem};
 
-pub const WE_ABI_VERSION: u32 = 2;
+pub const WE_ABI_VERSION: u32 = 3;
 pub const WE_OK: i32 = 0;
 pub const WE_ERR_NULL: i32 = -1;
 pub const WE_ERR_BAD_INDEX: i32 = -2;
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn reports_abi_version() {
-        assert_eq!(we_abi_version(), 2);
+        assert_eq!(we_abi_version(), 3);
     }
 
     #[test]

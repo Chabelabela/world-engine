@@ -81,6 +81,16 @@ test {
     systemProperty 'worldengine.test.cacheDir', layout.buildDirectory.dir('test-native-cache').get().asFile.absolutePath
 }
 
+// GameTests run in a headless server: ./gradlew runGameTest, also part of check. They are their own
+// source set and mod, so test code never ships in the release jar.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'worldengine-gametest'
+        enableClientGameTests = false
+    }
+}
+
 loom {
     runs {
         configureEach {
@@ -92,7 +102,7 @@ loom {
 }
 
 tasks.configureEach {
-    if (name in ['runClient', 'runServer']) {
+    if (name in ['runClient', 'runServer', 'runGameTest']) {
         dependsOn cargoBuild
     }
 }

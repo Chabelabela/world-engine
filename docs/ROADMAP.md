@@ -248,16 +248,19 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - [M1 overview](superpowers/plans/2026-11-20-m1-overview.md): phases M1a–M1f and their order.
 - [M1a foundations and frames](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md): detailed, with verified code.
 - [M1b handoff spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md): an experiment plan that ends in an ADR.
-- The M1c–M1f plans are written after M1a and the ADR.
+- [M1c planet terrain](superpowers/plans/2026-11-20-m1c-planet-terrain.md): detailed, with verified code. Done.
+- [M1d universe level](superpowers/plans/2026-11-20-m1d-universe-level.md): detailed; its code was built and GameTested in CI before the plan was written.
+- The M1c and M1d plans don't depend on the handoff design, so they are written before the ADR. The M1e and M1f plans are written from the ADR.
+- **Hard gate after M1d:** nothing after M1d (M1e, M1f, M2 and later) starts until the M1b spike is done and ADR 0001 is accepted.
 - **Entry tasks from the M0 reviews:** done in M1a (see `docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md`). Remaining items have new homes:
   - Thread-safe batched chunk generation is designed into M1c.
   - The clock source and debug-command permissions move to M3, with `we-sim`.
   - The period reduction of `t − epoch` was dropped after analysis. It can't beat the precision of an f64 `t`; M3 decides the clock representation.
-- **Spike first (2 weeks, time-boxed):** a fake hand-moved "ship" carries a player between a planet face and a shipyard plot with no loading screen. Record the findings as a design record (`docs/adr/0001-frames-and-handoff.md`).
+- **Spike first (2 weeks, time-boxed):** a fake hand-moved "ship" carries a player between a planet face and a shipyard plot with no loading screen. Record the findings as a design record (`docs/adr/0001-frames-and-handoff.md`). The spike needs a person at a desktop with Minecraft, so it runs on the owner's PC. It may run in parallel with M1a–M1d, but it must finish before anything after M1d.
 - `we-frames`: the cube-sphere projection, face↔block coordinates, the seam adjacency table with rotations, and the handoff transforms. Property tests cover round trips, adjacency consistency and distortion bounds.
 - `we-planet` v0: deterministic terrain height, climate and biomes as functions on the unit sphere, keyed by seed. **Done in M1c** ([plan](superpowers/plans/2026-11-20-m1c-planet-terrain.md)). Results are bit-identical on every platform (checked in CI on Linux x64/arm64, Windows and macOS), and a thread-safe batched FFI call serves chunk generation.
-- A **World Engine world preset**: the overworld becomes the universe level with the cross-net layout for the home planet and the moon. The Nether and End are left untouched for now.
-- A chunk generator that makes one batched FFI call per chunk (heights and biome ids), with vanilla features and structures layered on top through biomes.
+- A **World Engine world preset**: the overworld becomes the universe level with the cross-net layout for the home planet and the moon. The Nether and End are left untouched for now. **Done in M1d** ([plan](superpowers/plans/2026-11-20-m1d-universe-level.md)).
+- A chunk generator that makes one batched FFI call per chunk (heights and biome ids), with vanilla features and structures layered on top through biomes. **Done in M1d**: GameTests in CI compare generated chunks block by block with the core; worlds are stamped with the terrain version.
 - Seams: overlap bands, edit mirroring, and entity teleport with rotated position, velocity and look direction.
 - Per-planet time of day: the sun direction comes from planet rotation (mixins for sky angle and lighting, scoped to the universe level).
 
@@ -429,4 +432,6 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 
 1. ~~Execute the [M0 plan](superpowers/plans/2026-11-20-m0-foundations.md).~~ Done. CI is green on Linux, Windows and macOS. The manual in-game smoke test is still open.
 2. Settle the open decisions above, especially the licence.
-3. Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md), then run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) and accept its ADR before planning M1d–M1f.
+3. ~~Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md) and [M1c](superpowers/plans/2026-11-20-m1c-planet-terrain.md).~~ Done.
+4. ~~Execute the [M1d plan](superpowers/plans/2026-11-20-m1d-universe-level.md) (the universe level).~~ Done; the manual in-game checks (plan Task 11) are open.
+5. **Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001. Nothing after M1d starts before this.

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.chabelabela.worldengine.planet.Planets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,7 +23,7 @@ class NativeTerrainTest {
     /** Set by the Gradle test task to the freshly built library (see build.gradle). */
     private static final String LIBRARY_PROPERTY = "worldengine.native.path";
 
-    private static final int HOME_CELLS = 16_384;
+    private static final int HOME_CELLS = Planets.HOME.cells();
     private static final int MOON_CELLS = 4_096;
     private static NativeCore core;
 
