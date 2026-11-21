@@ -2,6 +2,8 @@ package io.github.chabelabela.worldengine;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import io.github.chabelabela.worldengine.level.UniverseBiomeSource;
+import io.github.chabelabela.worldengine.level.UniverseChunkGenerator;
 import io.github.chabelabela.worldengine.nativebridge.NativeCore;
 import io.github.chabelabela.worldengine.nativebridge.NativeCoreException;
 import io.github.chabelabela.worldengine.nativebridge.NativeLibraryLoader;
@@ -15,7 +17,10 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,11 +30,25 @@ public final class WorldEngineMod implements ModInitializer {
     /** Blocks per face edge of the home planet (ROADMAP §4.4). */
     public static final int HOME_CELLS = 16_384;
 
-    private static NativeCore core; // set once in onInitialize; null if the core is unavailable
+    private static volatile NativeCore core; // set once in onInitialize; null if the core is unavailable
     private static NativeCore.Universe universe; // server thread only
+
+    /** The native core, or null if it failed to load. */
+    public static NativeCore core() {
+        return core;
+    }
+
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
+    }
 
     @Override
     public void onInitialize() {
+        // Always registered, even without the core, so World Engine worlds still load and fail with a clear
+        // message instead of an unknown generator type.
+        Registry.register(BuiltInRegistries.CHUNK_GENERATOR, id("universe"), UniverseChunkGenerator.CODEC);
+        Registry.register(BuiltInRegistries.BIOME_SOURCE, id("universe"), UniverseBiomeSource.CODEC);
+
         NativeCore loaded = loadCore();
         core = loaded;
         if (loaded != null) {
