@@ -5,6 +5,7 @@ use worldengine_core::*;
 #[test]
 fn java_call_sequence() {
     assert_eq!(we_abi_version(), WE_ABI_VERSION);
+    assert_eq!(we_terrain_version(), we_planet::TERRAIN_VERSION);
     let universe = we_universe_new_demo();
     assert!(!universe.is_null());
     unsafe {

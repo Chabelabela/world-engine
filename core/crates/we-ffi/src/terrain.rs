@@ -4,6 +4,14 @@ use crate::{WE_ERR_INVALID, WE_ERR_NULL, WE_OK, guard};
 use we_frames::{CubeSphere, Face};
 use we_planet::{MAX_COLUMNS, PlanetKind, Terrain, fill_columns};
 
+/// The terrain model's version, `we_planet::TERRAIN_VERSION`. Worlds store it
+/// so that a later change to the terrain model is detected instead of
+/// silently mixing old and new chunks.
+#[unsafe(no_mangle)]
+pub extern "C" fn we_terrain_version() -> u32 {
+    we_planet::TERRAIN_VERSION
+}
+
 /// Fill `count_x` × `count_z` terrain columns whose north-west cell is
 /// (`x0`, `z0`) on face `face` (0–5, see `we_frames::Face`) of a planet
 /// with `cells` blocks per face edge, generated from `seed` as `kind`

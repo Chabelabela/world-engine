@@ -22,7 +22,7 @@ import java.util.Objects;
  * {@link #EXPECTED_ABI_VERSION} together with {@code WE_ABI_VERSION}.
  */
 public final class NativeCore {
-    public static final int EXPECTED_ABI_VERSION = 2;
+    public static final int EXPECTED_ABI_VERSION = 3;
 
     /** Largest region {@link #terrainColumns} accepts, in columns. */
     public static final int MAX_COLUMNS = 1 << 20; // keep equal to we_planet::MAX_COLUMNS
@@ -35,6 +35,7 @@ public final class NativeCore {
     private final MethodHandle bodyPositionFn;
     private final MethodHandle bodyNameFn;
     private final MethodHandle terrainColumnsFn;
+    private final MethodHandle terrainVersionFn;
 
     private NativeCore(SymbolLookup lib) {
         Linker linker = Linker.nativeLinker();
@@ -54,6 +55,7 @@ public final class NativeCore {
                 find(lib, "we_terrain_columns"),
                 FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT,
                         JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
+        terrainVersionFn = linker.downcallHandle(find(lib, "we_terrain_version"), FunctionDescriptor.of(JAVA_INT));
     }
 
     /** Load the library at {@code library} for the lifetime of the JVM and check its ABI version. */
@@ -104,6 +106,15 @@ public final class NativeCore {
     public int abiVersion() {
         try {
             return (int) abiVersionFn.invokeExact();
+        } catch (Throwable t) {
+            throw wrap(t);
+        }
+    }
+
+    /** The terrain model's version ({@code we_planet::TERRAIN_VERSION}); worlds record it. */
+    public int terrainVersion() {
+        try {
+            return (int) terrainVersionFn.invokeExact();
         } catch (Throwable t) {
             throw wrap(t);
         }

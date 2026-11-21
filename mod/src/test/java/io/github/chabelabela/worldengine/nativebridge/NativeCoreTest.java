@@ -30,6 +30,11 @@ class NativeCoreTest {
     }
 
     @Test
+    void reportsTerrainVersion() {
+        assertEquals(1, core.terrainVersion());
+    }
+
+    @Test
     void demoUniverseHasHomeAndMoon() {
         try (NativeCore.Universe u = core.newDemoUniverse()) {
             assertEquals(2, u.bodyCount());
