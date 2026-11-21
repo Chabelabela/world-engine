@@ -248,6 +248,8 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - [M1 overview](superpowers/plans/2026-11-20-m1-overview.md): phases M1a–M1f and their order.
 - [M1a foundations and frames](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md): detailed, with verified code.
 - [M1b handoff spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md): an experiment plan that ends in an ADR.
+- [M1c planet terrain](superpowers/plans/2026-11-20-m1c-planet-terrain.md): detailed, with verified code. Done.
+- [M1d universe level](superpowers/plans/2026-11-20-m1d-universe-level.md): detailed; its code was built and GameTested in CI before the plan was written.
 - The M1c and M1d plans don't depend on the handoff design, so they are written before the ADR. The M1e and M1f plans are written from the ADR.
 - **Hard gate after M1d:** nothing after M1d (M1e, M1f, M2 and later) starts until the M1b spike is done and ADR 0001 is accepted.
 - **Entry tasks from the M0 reviews:** done in M1a (see `docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md`). Remaining items have new homes:
@@ -431,5 +433,5 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 1. ~~Execute the [M0 plan](superpowers/plans/2026-11-20-m0-foundations.md).~~ Done. CI is green on Linux, Windows and macOS. The manual in-game smoke test is still open.
 2. Settle the open decisions above, especially the licence.
 3. ~~Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md) and [M1c](superpowers/plans/2026-11-20-m1c-planet-terrain.md).~~ Done.
-4. Plan and execute M1d (the universe level).
+4. Execute the [M1d plan](superpowers/plans/2026-11-20-m1d-universe-level.md) (the universe level).
 5. **Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001. Nothing after M1d starts before this.
