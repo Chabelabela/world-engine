@@ -2,6 +2,7 @@ package io.github.chabelabela.worldengine.spike;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -42,6 +43,7 @@ import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
 
 /** {@code /we spike …}: the M1b experiment commands. Game masters only, and only with the spike flag. */
 final class SpikeCommands {
@@ -77,6 +79,23 @@ final class SpikeCommands {
                         .then(Commands.literal("pose")
                                 .then(Commands.argument("pos", Vec3Argument.vec3())
                                         .executes(context -> pose(context.getSource(), Vec3Argument.getVec3(context, "pos")))))
+                        .then(Commands.literal("rot")
+                                .then(Commands.argument("yaw", FloatArgumentType.floatArg())
+                                        .then(Commands.argument("pitch", FloatArgumentType.floatArg())
+                                                .then(Commands.argument("roll", FloatArgumentType.floatArg())
+                                                        .executes(context -> rot(context.getSource(),
+                                                                FloatArgumentType.getFloat(context, "yaw"),
+                                                                FloatArgumentType.getFloat(context, "pitch"),
+                                                                FloatArgumentType.getFloat(context, "roll")))))))
+                        .then(Commands.literal("spin")
+                                .then(Commands.argument("degPerSec", FloatArgumentType.floatArg())
+                                        .executes(context -> spin(context.getSource(),
+                                                FloatArgumentType.getFloat(context, "degPerSec")))))
+                        .then(Commands.literal("e3")
+                                .then(Commands.literal("copies")
+                                        .then(Commands.argument("n", IntegerArgumentType.integer(0, 4096))
+                                                .executes(context -> copies(context.getSource(),
+                                                        IntegerArgumentType.getInteger(context, "n"))))))
                         .then(Commands.literal("e4")
                                 .then(Commands.literal("on").executes(context -> e4Active(context.getSource(), true)))
                                 .then(Commands.literal("off").executes(context -> e4Active(context.getSource(), false)))
@@ -171,6 +190,9 @@ final class SpikeCommands {
                 }
             }
         }
+        // Two translucent windows in the starboard wall (E3 translucency check).
+        put(level, o.offset(SHIP_X - 1, 2, 3), Blocks.STAINED_GLASS.pick(net.minecraft.world.item.DyeColor.LIGHT_BLUE).defaultBlockState());
+        put(level, o.offset(SHIP_X - 1, 2, 5), Blocks.STAINED_GLASS.pick(net.minecraft.world.item.DyeColor.LIGHT_BLUE).defaultBlockState());
         // Door in the bow wall (z = 0), facing out (north). Both halves, placed without neighbour updates.
         BlockState door = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.NORTH);
         put(level, o.offset(3, 1, 0), door.setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
@@ -213,7 +235,31 @@ final class SpikeCommands {
 
     private static int pose(CommandSourceStack source, Vec3 pos) {
         ShipSync.pose = pos;
+        ShipSync.broadcastPose(source.getServer());
         reply(source, "Ship pose (surface frame) set to " + fmt(pos));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** E3: the ship's orientation, as yaw (about +Y), then pitch (about +X), then roll (about +Z), in degrees. */
+    private static int rot(CommandSourceStack source, float yaw, float pitch, float roll) {
+        ShipSync.rotation = new Quaternionf().rotateY((float) Math.toRadians(yaw))
+                .rotateX((float) Math.toRadians(pitch)).rotateZ((float) Math.toRadians(roll));
+        ShipSync.broadcastPose(source.getServer());
+        reply(source, String.format(Locale.ROOT, "Ship rotation: yaw %.1f, pitch %.1f, roll %.1f", yaw, pitch, roll));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int spin(CommandSourceStack source, float degPerSec) {
+        ShipSync.spinDegPerSec = degPerSec;
+        ShipSync.broadcastPose(source.getServer());
+        reply(source, String.format(Locale.ROOT, "Ship spin: %.1f deg/s about a tilted axis", degPerSec));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int copies(CommandSourceStack source, int n) {
+        ShipSync.copies = n;
+        ShipSync.broadcastPose(source.getServer());
+        reply(source, "Ship copies drawn: " + n);
         return Command.SINGLE_SUCCESS;
     }
 

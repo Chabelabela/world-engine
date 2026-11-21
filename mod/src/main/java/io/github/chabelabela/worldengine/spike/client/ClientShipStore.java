@@ -7,6 +7,9 @@ import java.util.Map;
 import java.util.TreeMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /**
  * E4 option B, client side: the client's own copy of the ship, independent of vanilla's chunk storage (which
@@ -24,6 +27,15 @@ final class ClientShipStore {
     private int deltas;
     private int mismatches;
     private boolean lastOk = true;
+    /** Bumped on every change to the blocks, so the renderer knows when to re-mesh. */
+    private int version;
+    // E3 pose (surface frame), from ShipPayloads.Pose.
+    private Vec3 posePos = Vec3.ZERO;
+    private final Quaternionf baseRotation = new Quaternionf();
+    private float spinDegPerSec;
+    private int copies = 1;
+    private long poseNanos = System.nanoTime();
+    private static final Vector3f SPIN_AXIS = new Vector3f(0.3F, 1.0F, 0.2F).normalize();
 
     void onSnapshot(ShipPayloads.Snapshot s) {
         origin = s.origin();
@@ -34,6 +46,7 @@ final class ClientShipStore {
         blockEntities.clear();
         blockEntities.putAll(s.blockEntities());
         snapshots++;
+        version++;
         check("snapshot", s.states().length, s.hash());
     }
 
@@ -54,10 +67,12 @@ final class ClientShipStore {
             }
         }
         deltas++;
+        version++;
         check("delta", d.cells().length, d.hash());
     }
 
     void onForget(ShipPayloads.Forget f) {
+        version++;
         states = null;
         blockEntities.clear();
         WorldEngineMod.LOGGER.info("[spike] E4 client forget ship {}", f.shipId());
@@ -88,7 +103,57 @@ final class ClientShipStore {
                 lastOk ? "ok" : "MISMATCH", mismatches);
     }
 
+    void onPose(ShipPayloads.Pose p) {
+        // The server's rotation is authoritative; the spin phase restarts at each pose update (rare in E3).
+        baseRotation.set(p.qx(), p.qy(), p.qz(), p.qw());
+        posePos = new Vec3(p.x(), p.y(), p.z());
+        spinDegPerSec = p.spinDegPerSec();
+        copies = p.copies();
+        poseNanos = System.nanoTime();
+    }
+
+    /** The ship's orientation now: the base rotation, then the spin since the last pose. */
+    Quaternionf rotationNow() {
+        double seconds = (System.nanoTime() - poseNanos) / 1e9;
+        float angle = (float) Math.toRadians(spinDegPerSec * seconds);
+        return new Quaternionf(baseRotation).rotateAxis(angle, SPIN_AXIS);
+    }
+
+    boolean has() {
+        return states != null;
+    }
+
+    int version() {
+        return version;
+    }
+
+    int sizeX() {
+        return sizeX;
+    }
+
+    int sizeY() {
+        return sizeY;
+    }
+
+    int sizeZ() {
+        return sizeZ;
+    }
+
+    /** The global block-state id at local cell (x, y, z). */
+    int stateAt(int x, int y, int z) {
+        return states[x + sizeX * (z + sizeZ * y)];
+    }
+
+    Vec3 posePos() {
+        return posePos;
+    }
+
+    int copies() {
+        return copies;
+    }
+
     void clear() {
+        version++;
         states = null;
         blockEntities.clear();
     }

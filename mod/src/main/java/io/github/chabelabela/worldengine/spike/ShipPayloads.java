@@ -133,6 +133,34 @@ public final class ShipPayloads {
         }
     }
 
+    /**
+     * E3: where to draw the ship in the surface frame. Position, orientation (quaternion), a spin in degrees per
+     * second about a tilted axis (client-animated, to exercise arbitrary rotations), and how many copies to draw
+     * in a grid (for frame-time measurement; 0 hides the ship).
+     */
+    public record Pose(int shipId, double x, double y, double z, float qx, float qy, float qz, float qw,
+                       float spinDegPerSec, int copies) implements CustomPacketPayload {
+        public static final Type<Pose> TYPE = new Type<>(WorldEngineMod.id("ship_pose"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, Pose> CODEC = CustomPacketPayload.codec((p, buf) -> {
+            buf.writeVarInt(p.shipId);
+            buf.writeDouble(p.x);
+            buf.writeDouble(p.y);
+            buf.writeDouble(p.z);
+            buf.writeFloat(p.qx);
+            buf.writeFloat(p.qy);
+            buf.writeFloat(p.qz);
+            buf.writeFloat(p.qw);
+            buf.writeFloat(p.spinDegPerSec);
+            buf.writeVarInt(p.copies);
+        }, buf -> new Pose(buf.readVarInt(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(),
+                buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readVarInt()));
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** The ship left this client's range: drop the copy. */
     public record Forget(int shipId) implements CustomPacketPayload {
         public static final Type<Forget> TYPE = new Type<>(WorldEngineMod.id("ship_forget"));

@@ -24,6 +24,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
 
 /**
  * E4 option B, server side: keeps every player within {@link #RANGE} of the ship's pose supplied with a copy of
@@ -38,6 +39,10 @@ public final class ShipSync {
 
     /** The ship's position in the surface frame. E3/E5 will move it; for E4 it only decides who gets copies. */
     static Vec3 pose = new Vec3(256.5, -50.0, 256.5);
+    /** E3: orientation, spin and copy count, sent with {@link ShipPayloads.Pose}. */
+    static Quaternionf rotation = new Quaternionf();
+    static float spinDegPerSec;
+    static int copies = 1;
     private static boolean active;
     private static final Set<UUID> TRACKING = new HashSet<>();
     private static final IntSortedSet DIRTY = new IntRBTreeSet();
@@ -112,6 +117,7 @@ public final class ShipSync {
                 ShipPayloads.Snapshot snapshot = snapshot(level);
                 int[] size = measure(snapshot, ShipPayloads.Snapshot.CODEC::encode, level.registryAccess());
                 ServerPlayNetworking.send(player, snapshot);
+                ServerPlayNetworking.send(player, posePayload());
                 WorldEngineMod.LOGGER.info("[spike] E4 snapshot -> {}: {} cells, {} block entities, raw={} deflated={} hash={}",
                         player.getGameProfile().name(), snapshot.states().length, snapshot.blockEntities().size(),
                         size[0], size[1], snapshot.hash());
@@ -150,6 +156,22 @@ public final class ShipSync {
         }
         WorldEngineMod.LOGGER.info("[spike] E4 delta: {} cells, {} block entities, raw={} hash={} -> {} players",
                 n, bes.size(), size[0], delta.hash(), TRACKING.size());
+    }
+
+    static ShipPayloads.Pose posePayload() {
+        return new ShipPayloads.Pose(SHIP_ID, pose.x, pose.y, pose.z, rotation.x, rotation.y, rotation.z, rotation.w,
+                spinDegPerSec, copies);
+    }
+
+    /** Sends the current pose to everyone who has the ship. */
+    static void broadcastPose(MinecraftServer server) {
+        ShipPayloads.Pose payload = posePayload();
+        for (UUID id : TRACKING) {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p != null) {
+                ServerPlayNetworking.send(p, payload);
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------------------------

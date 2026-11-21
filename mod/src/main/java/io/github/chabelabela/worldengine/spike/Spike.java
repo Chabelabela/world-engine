@@ -49,6 +49,8 @@ public final class Spike {
                 .register(ShipPayloads.Delta.TYPE, ShipPayloads.Delta.CODEC);
         net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
                 .register(ShipPayloads.Forget.TYPE, ShipPayloads.Forget.CODEC);
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
+                .register(ShipPayloads.Pose.TYPE, ShipPayloads.Pose.CODEC);
         SpikeCommands.init();
         WorldEngineMod.LOGGER.warn("World Engine M1b spike enabled (-Dworldengine.spike=true): /we spike …");
     }
