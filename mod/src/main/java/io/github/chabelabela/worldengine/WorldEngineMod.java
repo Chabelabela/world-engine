@@ -72,6 +72,7 @@ public final class WorldEngineMod implements ModInitializer {
         }
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 WorldEngineCommands.register(dispatcher));
+        io.github.chabelabela.worldengine.spike.Spike.init();
     }
 
     /** Records the terrain version in a new universe world, and warns if an old world's differs. */

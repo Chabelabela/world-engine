@@ -97,6 +97,8 @@ loom {
             // Use the freshly built library in dev instead of the extracted copy.
             vmArg "-Dworldengine.native.path=${hostLibrary.absolutePath}"
             vmArg '--enable-native-access=ALL-UNNAMED'
+            // M1b spike branch only: enables /we spike and the measurement HUD.
+            vmArg '-Dworldengine.spike=true'
         }
     }
 }

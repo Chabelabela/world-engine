@@ -8,6 +8,9 @@
   "entrypoints": {
     "main": [
       "io.github.chabelabela.worldengine.WorldEngineMod"
+    ],
+    "client": [
+      "io.github.chabelabela.worldengine.spike.client.SpikeClient"
     ]
   },
   "depends": {
