@@ -4,9 +4,14 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.chabelabela.worldengine.WorldEngineMod;
+import io.github.chabelabela.worldengine.planet.PlanetHit;
+import io.github.chabelabela.worldengine.planet.PlanetLayout;
+import io.github.chabelabela.worldengine.planet.PlanetSpec;
+import io.github.chabelabela.worldengine.planet.Planets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -29,6 +34,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Relative;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -63,9 +69,11 @@ final class SpikeCommands {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(SpikeCommands::runPending);
         ServerTickEvents.END_SERVER_TICK.register(ShipSync::tick);
+        ServerTickEvents.END_SERVER_TICK.register(Seams::tick);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             PENDING.clear();
             ShipSync.reset();
+            Seams.reset();
         });
     }
 
@@ -104,6 +112,24 @@ final class SpikeCommands {
                                         .then(Commands.argument("player", EntityArgument.player())
                                                 .executes(context -> e4Test(context.getSource(),
                                                         EntityArgument.getPlayer(context, "player"))))))
+                        .then(Commands.literal("e2")
+                                .then(Commands.literal("on").executes(context -> e2Enable(context.getSource(), true)))
+                                .then(Commands.literal("off").executes(context -> e2Enable(context.getSource(), false)))
+                                .then(Commands.literal("seams").executes(context -> e2Seams(context.getSource())))
+                                .then(Commands.literal("compensate")
+                                        .then(Commands.literal("on").executes(context -> e2Compensate(context.getSource(), true)))
+                                        .then(Commands.literal("off").executes(context -> e2Compensate(context.getSource(), false))))
+                                .then(Commands.literal("test")
+                                        .then(Commands.argument("player", EntityArgument.player())
+                                                .then(Commands.argument("runs", IntegerArgumentType.integer(1, 20))
+                                                        .executes(context -> e2Test(context.getSource(),
+                                                                EntityArgument.getPlayer(context, "player"),
+                                                                IntegerArgumentType.getInteger(context, "runs"), ""))
+                                                        .then(Commands.argument("filter", StringArgumentType.word())
+                                                                .executes(context -> e2Test(context.getSource(),
+                                                                        EntityArgument.getPlayer(context, "player"),
+                                                                        IntegerArgumentType.getInteger(context, "runs"),
+                                                                        StringArgumentType.getString(context, "filter"))))))))
                         .then(Commands.literal("e1")
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
@@ -380,6 +406,132 @@ final class SpikeCommands {
     private static void floorRow(ServerLevel level, BlockState state) {
         for (int x = 0; x < Spike.SHIP_X; x++) {
             level.setBlock(Spike.PLOT_ORIGIN.offset(x, 0, 4), state, Block.UPDATE_ALL);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // E2: seam crossing
+    // ------------------------------------------------------------------------------------------------
+
+    private static int e2Enable(CommandSourceStack source, boolean on) {
+        Seams.enabled = on;
+        reply(source, "Seam crossing " + (on ? "on" : "off"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int e2Compensate(CommandSourceStack source, boolean on) {
+        Seams.compensate = on;
+        reply(source, "Seam teleport compensation (one tick of velocity) " + (on ? "on" : "off"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int e2Seams(CommandSourceStack source) {
+        List<Seams.Edge> seams = Seams.seams();
+        StringBuilder line = new StringBuilder(seams.size() + " directed seams:");
+        for (Seams.Edge edge : seams) {
+            line.append(' ').append(edge.label());
+        }
+        reply(source, line.toString());
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * E2's automated run for {@code player}: for every directed seam of the home planet, one control jump far from
+     * the edge (how far the launch carries on flat ground), then {@code runs} running jumps across the edge (the last
+     * one near a corner). Each landing is compared with {@code fold(start + outward * controlDistance)}.
+     */
+    private static int e2Test(CommandSourceStack source, ServerPlayer player, int runs, String filter) {
+        MinecraftServer server = source.getServer();
+        ServerLevel level = server.overworld();
+        UUID id = player.getUUID();
+        Seams.enabled = true;
+        List<Seams.Edge> seams = Seams.seams().stream()
+                .filter(e -> e.planet() == Planets.HOME && e.label().contains(filter)).toList();
+        long at = server.getTickCount() + 20;
+        int radius = server.getPlayerList().getViewDistance();
+        for (Seams.Edge edge : seams) {
+            int n = edge.planet().cells();
+            double[] control = new double[1];
+            double[] controlStart = Seams.start(edge, Seams.CONTROL_INSIDE, n / 2.0 + 0.5);
+            PENDING.add(new Pending(at, () -> withPlayer(server, id, p -> Seams.place(p, edge, controlStart))));
+            PENDING.add(new Pending(at + 20, () -> withPlayer(server, id, p -> Seams.launch(p, edge))));
+            PENDING.add(new Pending(at + 80, () -> withPlayer(server, id, p -> {
+                PlanetLayout layout = edge.planet().layout();
+                double gx = p.getX() - layout.faceOriginX(edge.face());
+                double gz = p.getZ() - layout.faceOriginZ(edge.face());
+                control[0] = Math.hypot(gx - controlStart[0], gz - controlStart[1]);
+                WorldEngineMod.LOGGER.info(String.format(Locale.ROOT, "[spike] E2 control %s: travelled %.3f blocks",
+                        edge.label(), control[0]));
+            })));
+            at += 100;
+            for (int r = 0; r < runs; r++) {
+                double along = r == runs - 1 ? 200.5 : n / 2.0 + 0.5 + 7 * r;
+                double[] start = Seams.start(edge, Seams.START_INSIDE, along);
+                double[] out = Seams.outward(edge.side());
+                String label = String.format(Locale.ROOT, "%s run %d/%d along=%.1f", edge.label(), r + 1, runs, along);
+                // Pre-load around where the jump will land, like E1's 60-tick pre-load.
+                SeamFold.Crossed target = SeamFold.cross(n, edge.face(), start[0] + out[0] * 5, start[1] + out[1] * 5, 0, 0, 0);
+                ChunkPos targetChunk = ChunkPos.containing(BlockPos.containing(
+                        edge.planet().layout().faceOriginX(target.face()) + target.x(), Seams.GROUND_Y,
+                        edge.planet().layout().faceOriginZ(target.face()) + target.z()));
+                PENDING.add(new Pending(at, () -> withPlayer(server, id, p -> {
+                    level.getChunkSource().addTicketWithRadius(Spike.preloadTicket, targetChunk, radius);
+                    Seams.place(p, edge, start);
+                    Seams.LAST_CROSSING.remove(id);
+                })));
+                PENDING.add(new Pending(at + 60, () -> withPlayer(server, id, p -> {
+                    p.sendSystemMessage(Component.literal("[E2] " + label));
+                    Seams.launch(p, edge);
+                })));
+                PENDING.add(new Pending(at + 120, () -> withPlayer(server, id, p -> {
+                    e2Landing(p, edge, start, control[0], label);
+                    level.getChunkSource().removeTicketWithRadius(Spike.preloadTicket, targetChunk, radius);
+                })));
+                at += 130;
+            }
+        }
+        PENDING.add(new Pending(at, () -> WorldEngineMod.LOGGER.info("[spike] E2 test done")));
+        reply(source, String.format(Locale.ROOT, "E2 test: %d directed seams x %d runs for %s, about %d s", seams.size(),
+                runs, player.getGameProfile().name(), (at - server.getTickCount()) / 20));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Compares where the jump landed with fold(start + outward * control distance). */
+    private static void e2Landing(ServerPlayer p, Seams.Edge edge, double[] start, double controlDistance, String label) {
+        PlanetSpec planet = edge.planet();
+        double[] out = Seams.outward(edge.side());
+        SeamFold.Crossed expected = SeamFold.cross(planet.cells(), edge.face(), start[0] + out[0] * controlDistance,
+                start[1] + out[1] * controlDistance, out[0], out[1], Seams.outwardYaw(edge.side()));
+        PlanetHit hit = Planets.at(Mth.floor(p.getX()), Mth.floor(p.getZ()));
+        Seams.Crossing crossing = Seams.LAST_CROSSING.get(p.getUUID());
+        if (hit == null || expected == null || crossing == null) {
+            WorldEngineMod.LOGGER.info("[spike] E2 run {}: NO CROSSING (landed on {}, expected {})", label,
+                    hit == null ? "no face" : hit.cell().face(), expected == null ? "none" : expected.face());
+            return;
+        }
+        PlanetLayout layout = planet.layout();
+        double gx = p.getX() - layout.faceOriginX(hit.cell().face());
+        double gz = p.getZ() - layout.faceOriginZ(hit.cell().face());
+        boolean sameFace = hit.cell().face() == expected.face();
+        double error = sameFace ? Math.hypot(gx - expected.x(), gz - expected.z()) : Double.NaN;
+        // Error split into along the expected direction of travel (distance) and across it (direction).
+        double dx = gx - expected.x();
+        double dz = gz - expected.z();
+        double alongErr = dx * expected.vx() + dz * expected.vz();
+        double acrossErr = -dx * expected.vz() + dz * expected.vx();
+        float yawErr = Mth.wrapDegrees(p.getYRot() - expected.yaw());
+        WorldEngineMod.LOGGER.info(String.format(Locale.ROOT,
+                "[spike] E2 run %s: %s -> %s turns=%d landed (%.3f, %.3f) expected (%.3f, %.3f) error=%.3f "
+                        + "(along %.3f, across %.3f) yawErr=%.2f serverError=%.2e vBefore=(%.3f, %.3f) vAfter=(%.3f, %.3f)",
+                label, edge.face(), hit.cell().face(), crossing.turns(), gx, gz, expected.x(), expected.z(), error,
+                alongErr, acrossErr, yawErr, crossing.serverError(), crossing.velocityBefore().x,
+                crossing.velocityBefore().z, crossing.velocityAfter().x, crossing.velocityAfter().z));
+    }
+
+    private static void withPlayer(MinecraftServer server, UUID id, java.util.function.Consumer<ServerPlayer> action) {
+        ServerPlayer p = server.getPlayerList().getPlayer(id);
+        if (p != null) {
+            action.accept(p);
         }
     }
 

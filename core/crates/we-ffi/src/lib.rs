@@ -18,8 +18,10 @@
 //! Rust aborts at the `extern "C"` boundary (Rust >= 1.81) instead of unwinding
 //! into the JVM.
 
+mod spike;
 mod terrain;
 
+pub use spike::{WE_SPIKE_NOT_FOLDABLE, we_spike_cross};
 pub use terrain::{we_terrain_columns, we_terrain_version};
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
