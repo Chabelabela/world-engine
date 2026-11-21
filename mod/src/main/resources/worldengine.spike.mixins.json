@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.chabelabela.worldengine.mixin.spike",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ServerLevelSpikeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

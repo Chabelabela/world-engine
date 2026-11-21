@@ -42,6 +42,7 @@ final class SpikeHud {
     private static final boolean SODIUM =
             net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium");
 
+    private final ClientShipStore ship;
     private Vec3 lastCamera;
     private boolean jumped;
     private long jumpNanos;
@@ -57,6 +58,10 @@ final class SpikeHud {
     private int jumps;
     /** Why the last missing frame counted, for debugging the metric itself. */
     private String lastMissing = "";
+
+    SpikeHud(ClientShipStore ship) {
+        this.ship = ship;
+    }
 
     // -------------------------------------------------------------------------------------------
     // Per frame
@@ -149,8 +154,14 @@ final class SpikeHud {
                 : "no jump yet";
         graphics.text(mc.font, line1, 4, 4, 0xFFFFFF55, true);
         graphics.text(mc.font, line2, 4, 14, 0xFFFFFF55, true);
+        int y = 24;
         if (!lastMissing.isEmpty()) {
-            graphics.text(mc.font, "last missing: " + lastMissing, 4, 24, 0xFFFFFF55, true);
+            graphics.text(mc.font, "last missing: " + lastMissing, 4, y, 0xFFFFFF55, true);
+            y += 10;
+        }
+        String shipLine = ship.hudLine();
+        if (shipLine != null) {
+            graphics.text(mc.font, shipLine, 4, y, 0xFF55FFFF, true);
         }
     }
 
