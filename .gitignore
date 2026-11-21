@@ -5,6 +5,7 @@
 /mod/.gradle/
 /mod/build/
 /mod/run/
+/mod/run-server/
 /mod/.idea/
 *.iml
 

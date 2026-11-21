@@ -100,11 +100,21 @@ loom {
             // M1b spike branch only: enables /we spike and the measurement HUD.
             vmArg '-Dworldengine.spike=true'
         }
+        // M1b spike: the dedicated server gets its own directory so it can run next to a client.
+        server {
+            runDir 'run-server'
+        }
+        // M1b spike: a client that joins the local dedicated server as a fixed (offline) user.
+        spikeClient {
+            inherit client
+            configName = 'Spike client (joins localhost)'
+            programArgs '--quickPlayMultiplayer', 'localhost:25565', '--username', 'SpikeA'
+        }
     }
 }
 
 tasks.configureEach {
-    if (name in ['runClient', 'runServer', 'runGameTest']) {
+    if (name in ['runClient', 'runServer', 'runGameTest', 'runSpikeClient']) {
         dependsOn cargoBuild
     }
 }

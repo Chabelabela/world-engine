@@ -16,6 +16,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -65,6 +66,12 @@ final class SpikeCommands {
                         .then(Commands.literal("setup").executes(context -> setup(context.getSource())))
                         .then(Commands.literal("ship").executes(context -> ship(context.getSource())))
                         .then(Commands.literal("plot").executes(context -> plot(context.getSource())))
+                        .then(Commands.literal("e1")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
+                                                .executes(context -> e1Batch(context.getSource(),
+                                                        EntityArgument.getPlayer(context, "player"),
+                                                        IntegerArgumentType.getInteger(context, "rounds"))))))
                         .then(Commands.literal("jump")
                                 .then(Commands.argument("pos", Vec3Argument.vec3())
                                         .executes(context -> jump(context, 0))
@@ -181,6 +188,75 @@ final class SpikeCommands {
     // ------------------------------------------------------------------------------------------------
     // E1: same-level jump with optional pre-loading
     // ------------------------------------------------------------------------------------------------
+
+    /** E1's pre-load variants, interleaved within each round so drift (JIT, GC, caches) hits all alike. */
+    private static final int[] E1_PRELOADS = {0, 20, 60};
+    /** Ticks between one jump's arrival and the next jump's start: summary at 2 s, ticket gone at 5 s. */
+    private static final int E1_GAP_TICKS = 200;
+    /** The surface end of every E1 jump (the ship end is the plot). */
+    private static final Vec3 E1_GROUND = new Vec3(256.5, -60.0, 256.5);
+
+    /**
+     * Runs E1 unattended: {@code rounds} rounds of one jump per pre-load variant, alternating between the
+     * ground and the ship. Each jump is announced to the player as a chat line {@code [E1] run …} just before
+     * the teleport, so the client log pairs each {@code [spike] E1 jump} summary with its variant.
+     */
+    private static int e1Batch(CommandSourceStack source, ServerPlayer player, int rounds) {
+        MinecraftServer server = source.getServer();
+        BlockPos o = Spike.PLOT_ORIGIN;
+        Vec3 ship = new Vec3(o.getX() + 3.5, o.getY() + 1, o.getZ() + 3.5);
+        UUID id = player.getUUID();
+        // Warm-up: start on the ground (unlabelled, so the parser ignores it).
+        teleport(player, E1_GROUND, 0);
+        long at = server.getTickCount() + E1_GAP_TICKS;
+        int total = rounds * E1_PRELOADS.length;
+        int n = 0;
+        for (int round = 0; round < rounds; round++) {
+            for (int preload : E1_PRELOADS) {
+                n++;
+                Vec3 target = n % 2 == 1 ? ship : E1_GROUND;
+                String label = String.format(Locale.ROOT, "[E1] run %d/%d preload=%d to=%s",
+                        n, total, preload, target == ship ? "ship" : "ground");
+                PENDING.add(new Pending(at, () -> {
+                    ServerPlayer p = server.getPlayerList().getPlayer(id);
+                    if (p != null) {
+                        beginJump(server, p, target, preload, label);
+                    }
+                }));
+                at += preload + E1_GAP_TICKS;
+            }
+        }
+        long seconds = (at - server.getTickCount()) / 20;
+        reply(source, String.format(Locale.ROOT, "E1 batch: %d jumps for %s, about %d s", total,
+                player.getGameProfile().name(), seconds));
+        PENDING.add(new Pending(at, () -> WorldEngineMod.LOGGER.info("[spike] E1 batch done")));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** One labelled jump: pre-load ticket now, label and teleport after {@code preloadTicks}. */
+    private static void beginJump(MinecraftServer server, ServerPlayer player, Vec3 target, int preloadTicks, String label) {
+        ServerLevel level = player.level();
+        ChunkPos chunk = ChunkPos.containing(BlockPos.containing(target));
+        int radius = server.getPlayerList().getViewDistance();
+        long now = server.getTickCount();
+        UUID id = player.getUUID();
+        Runnable go = () -> {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p != null) {
+                p.sendSystemMessage(Component.literal(label));
+                WorldEngineMod.LOGGER.info("[spike] {}", label);
+                teleport(p, target, preloadTicks);
+            }
+        };
+        if (preloadTicks > 0) {
+            level.getChunkSource().addTicketWithRadius(Spike.preloadTicket, chunk, radius);
+            PENDING.add(new Pending(now + preloadTicks, go));
+            PENDING.add(new Pending(now + preloadTicks + TICKET_LINGER_TICKS,
+                    () -> level.getChunkSource().removeTicketWithRadius(Spike.preloadTicket, chunk, radius)));
+        } else {
+            go.run();
+        }
+    }
 
     private static int jump(CommandContext<CommandSourceStack> context, int preloadTicks) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
