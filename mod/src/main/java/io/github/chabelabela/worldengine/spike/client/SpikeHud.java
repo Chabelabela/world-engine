@@ -9,20 +9,24 @@ import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.gui.screens.ProgressScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.debugchart.LocalSampleLogger;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * The M1 measurement HUD (spike only). Per frame, after the last teleport:
  * <ul>
  *   <li>frames that had a <b>missing chunk</b> within 32 blocks of the camera: a chunk the client doesn't have,
- *       or a section with blocks whose mesh isn't compiled yet (vanilla renderer only; with Sodium the mesh
- *       check is skipped and only chunk data counts);</li>
+ *       or a section with blocks <i>inside the view frustum</i> whose mesh isn't compiled yet (vanilla renderer
+ *       only; with Sodium the mesh check is skipped and only chunk data counts). Vanilla compiles only the
+ *       sections it draws, so sections behind the camera stay uncompiled after a jump until you look at them;
+ *       they aren't holes anyone can see, so they don't count;</li>
  *   <li>bytes received per second, from vanilla's bandwidth logger (counts only on a real network connection:
  *       singleplayer uses an in-memory pipeline that is never measured);</li>
  *   <li>loading screens opened since the jump.</li>
@@ -51,6 +55,8 @@ final class SpikeHud {
     private final long[] rxWindow = new long[20];
     private int rxIndex;
     private int jumps;
+    /** Why the last missing frame counted, for debugging the metric itself. */
+    private String lastMissing = "";
 
     // -------------------------------------------------------------------------------------------
     // Per frame
@@ -69,9 +75,11 @@ final class SpikeHud {
         lastCamera = camera;
         if (jumped) {
             framesSinceJump++;
-            if (anyMissing(mc, level, camera)) {
+            String missing = firstMissing(mc, level, camera);
+            if (missing != null) {
                 missingFrames++;
                 lastMissingFrame = framesSinceJump;
+                lastMissing = missing;
             }
         }
         draw(mc, graphics);
@@ -84,6 +92,7 @@ final class SpikeHud {
         framesSinceJump = 0;
         missingFrames = 0;
         lastMissingFrame = -1;
+        lastMissing = "";
         loadingScreens = 0;
         ticksSinceJump = 0;
         rxBytesSinceJump = 0;
@@ -91,19 +100,20 @@ final class SpikeHud {
         WorldEngineMod.LOGGER.info("[spike] client saw jump #{}: {} blocks", jumps, Math.round(from.distanceTo(to)));
     }
 
-    /** True if some chunk within {@link #RADIUS} blocks of the camera isn't ready to be seen. */
-    private static boolean anyMissing(Minecraft mc, ClientLevel level, Vec3 camera) {
+    /** What isn't ready to be seen within {@link #RADIUS} blocks of the camera, or null if everything is. */
+    private static String firstMissing(Minecraft mc, ClientLevel level, Vec3 camera) {
         int renderChunks = mc.options.getEffectiveRenderDistance();
         int camChunkX = SectionPos.blockToSectionCoord(camera.x);
         int camChunkZ = SectionPos.blockToSectionCoord(camera.z);
         int minSectionY = Math.max(level.getMinSectionY(), SectionPos.blockToSectionCoord(camera.y - RADIUS));
         int maxSectionY = Math.min(level.getMaxSectionY(), SectionPos.blockToSectionCoord(camera.y + RADIUS));
         int r = Math.min(RADIUS >> 4, renderChunks);
+        Frustum frustum = mc.gameRenderer.mainCamera().getCullFrustum();
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 LevelChunk chunk = level.getChunkSource().getChunk(camChunkX + dx, camChunkZ + dz, ChunkStatus.FULL, false);
                 if (chunk == null) {
-                    return true;
+                    return "no chunk " + (camChunkX + dx) + "," + (camChunkZ + dz);
                 }
                 if (SODIUM) {
                     continue;
@@ -114,13 +124,17 @@ final class SpikeHud {
                         continue; // air sections may never be meshed; they can't look missing anyway
                     }
                     BlockPos pos = SectionPos.of(camChunkX + dx, sy, camChunkZ + dz).origin();
+                    AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 16, pos.getY() + 16, pos.getZ() + 16);
+                    if (!frustum.isVisible(box)) {
+                        continue;
+                    }
                     if (!mc.levelRenderer.isSectionCompiledAndVisible(pos, 0L)) {
-                        return true;
+                        return "uncompiled section " + (camChunkX + dx) + "," + sy + "," + (camChunkZ + dz);
                     }
                 }
             }
         }
-        return false;
+        return null;
     }
 
     private void draw(Minecraft mc, GuiGraphicsExtractor graphics) {
@@ -133,9 +147,11 @@ final class SpikeHud {
                         jumps, framesSinceJump, (System.nanoTime() - jumpNanos) / 1e9, missingFrames,
                         lastMissingFrame >= 0 ? " (last @" + lastMissingFrame + ")" : "", loadingScreens)
                 : "no jump yet";
-        int y = graphics.guiHeight() - 70;
-        graphics.text(mc.font, line1, 4, y, 0xFFFFFF55, true);
-        graphics.text(mc.font, line2, 4, y + 10, 0xFFFFFF55, true);
+        graphics.text(mc.font, line1, 4, 4, 0xFFFFFF55, true);
+        graphics.text(mc.font, line2, 4, 14, 0xFFFFFF55, true);
+        if (!lastMissing.isEmpty()) {
+            graphics.text(mc.font, "last missing: " + lastMissing, 4, 24, 0xFFFFFF55, true);
+        }
     }
 
     // -------------------------------------------------------------------------------------------
@@ -155,10 +171,10 @@ final class SpikeHud {
             summaryLogged = true;
             WorldEngineMod.LOGGER.info(
                     "[spike] E1 jump #{}: loadingScreen={} missingFrames={} lastMissingFrame={} framesIn2s={} rxBytes2s={} "
-                            + "renderDistance={} sodium={} singleplayer={}",
+                            + "renderDistance={} sodium={} singleplayer={} lastMissing=\"{}\"",
                     jumps, loadingScreens > 0, missingFrames, lastMissingFrame, framesSinceJump,
                     mc.hasSingleplayerServer() ? "n/a" : Long.toString(rxBytesSinceJump),
-                    mc.options.getEffectiveRenderDistance(), SODIUM, mc.hasSingleplayerServer());
+                    mc.options.getEffectiveRenderDistance(), SODIUM, mc.hasSingleplayerServer(), lastMissing);
         }
     }
 
