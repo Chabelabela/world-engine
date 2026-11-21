@@ -88,7 +88,10 @@ final class ShipRenderer {
         lastFrameNanos = start;
         Minecraft mc = Minecraft.getInstance();
         if (mc.level != null && ship.has() && ship.copies() > 0) {
-            int skyMax = mc.level.getBrightness(LightLayer.SKY, BlockPos.containing(ship.posePos()));
+            // The world's sky light just above the ship's box. (Sampling the pose's own block went to 0 as soon as the
+            // ship's centre dipped into terrain, blacking out the whole mesh.)
+            int skyMax = mc.level.getBrightness(LightLayer.SKY,
+                    BlockPos.containing(ship.posePos().add(0, ship.sizeY() / 2.0 + 1, 0)));
             if (builtVersion != ship.version() || builtSkyMax != skyMax) {
                 rebuild(mc, skyMax);
             }
