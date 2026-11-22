@@ -110,14 +110,16 @@ public final class ShipSync {
 
     private static void updateTracking(MinecraftServer server, ServerLevel level) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            boolean near = player.level() == level && player.position().distanceTo(pose) <= RANGE;
+            // E5: a player in the shipyard is aboard in the ship frame, however far the pose is.
+            boolean near = player.level() == level && (player.position().distanceTo(pose) <= RANGE
+                    || Spike.inShipyard(player.getX(), player.getZ()));
             boolean tracked = TRACKING.contains(player.getUUID());
             if (near && !tracked) {
                 TRACKING.add(player.getUUID());
                 ShipPayloads.Snapshot snapshot = snapshot(level);
                 int[] size = measure(snapshot, ShipPayloads.Snapshot.CODEC::encode, level.registryAccess());
                 ServerPlayNetworking.send(player, snapshot);
-                ServerPlayNetworking.send(player, posePayload());
+                ServerPlayNetworking.send(player, posePayload(server.getTickCount()));
                 WorldEngineMod.LOGGER.info("[spike] E4 snapshot -> {}: {} cells, {} block entities, raw={} deflated={} hash={}",
                         player.getGameProfile().name(), snapshot.states().length, snapshot.blockEntities().size(),
                         size[0], size[1], snapshot.hash());
@@ -128,6 +130,16 @@ public final class ShipSync {
             }
         }
         TRACKING.removeIf(id -> server.getPlayerList().getPlayer(id) == null);
+    }
+
+    /** E5: makes sure {@code player} has the ship now (snapshot and pose), before they are placed aboard. */
+    static void ensureTracked(MinecraftServer server, ServerPlayer player) {
+        ServerLevel level = server.overworld();
+        if (TRACKING.add(player.getUUID())) {
+            ServerPlayNetworking.send(player, snapshot(level));
+            WorldEngineMod.LOGGER.info("[spike] E4 snapshot -> {} (E5 start)", player.getGameProfile().name());
+        }
+        ServerPlayNetworking.send(player, posePayload(server.getTickCount()));
     }
 
     private static void flush(MinecraftServer server, ServerLevel level) {
@@ -158,14 +170,23 @@ public final class ShipSync {
                 n, bes.size(), size[0], delta.hash(), TRACKING.size());
     }
 
-    static ShipPayloads.Pose posePayload() {
+    static ShipPayloads.Pose posePayload(long tick) {
         return new ShipPayloads.Pose(SHIP_ID, pose.x, pose.y, pose.z, rotation.x, rotation.y, rotation.z, rotation.w,
-                spinDegPerSec, copies);
+                spinDegPerSec, copies, tick);
+    }
+
+    static boolean tracking(ServerPlayer player) {
+        return TRACKING.contains(player.getUUID());
+    }
+
+    /** The level position of the ship's cell (0, 0, 0) corner at {@code pose} (unrotated, as in E5). */
+    static Vec3 cellOrigin(Vec3 pose) {
+        return pose.subtract(Spike.SHIP_X / 2.0, Spike.SHIP_Y / 2.0, Spike.SHIP_Z / 2.0);
     }
 
     /** Sends the current pose to everyone who has the ship. */
     static void broadcastPose(MinecraftServer server) {
-        ShipPayloads.Pose payload = posePayload();
+        ShipPayloads.Pose payload = posePayload(server.getTickCount());
         for (UUID id : TRACKING) {
             ServerPlayer p = server.getPlayerList().getPlayer(id);
             if (p != null) {

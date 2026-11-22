@@ -24,6 +24,14 @@ public final class Spike {
     public static final int SHIP_Z = 9;
 
     /**
+     * E5: is this level position in the shipyard (the ship frame)? Plots are far from every planet, so a generous box
+     * around the test plot is unambiguous. Client and server use the same rule.
+     */
+    public static boolean inShipyard(double x, double z) {
+        return Math.abs(x - PLOT_ORIGIN.getX()) < 1024 && Math.abs(z - PLOT_ORIGIN.getZ()) < 1024;
+    }
+
+    /**
      * Loads and simulates the destination of a pre-loaded jump. Not persisted (unlike vanilla's FORCED), so a
      * ticket left over by a stopped server can't keep chunks loaded forever. Flags: LOADING | SIMULATION.
      */
@@ -51,6 +59,14 @@ public final class Spike {
                 .register(ShipPayloads.Forget.TYPE, ShipPayloads.Forget.CODEC);
         net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
                 .register(ShipPayloads.Pose.TYPE, ShipPayloads.Pose.CODEC);
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
+                .register(ShipPayloads.FrameSwitch.TYPE, ShipPayloads.FrameSwitch.CODEC);
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
+                .register(ShipPayloads.E5Settings.TYPE, ShipPayloads.E5Settings.CODEC);
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.serverboundPlay()
+                .register(ShipPayloads.Rel.TYPE, ShipPayloads.Rel.CODEC);
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(ShipPayloads.Rel.TYPE,
+                (payload, context) -> Handoff.onRel(context.player(), payload));
         SpikeCommands.init();
         WorldEngineMod.LOGGER.warn("World Engine M1b spike enabled (-Dworldengine.spike=true): /we spike …");
     }

@@ -2,6 +2,7 @@ package io.github.chabelabela.worldengine.spike.client;
 
 import io.github.chabelabela.worldengine.WorldEngineMod;
 import io.github.chabelabela.worldengine.spike.ShipPayloads;
+import java.util.ArrayDeque;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
@@ -36,6 +37,15 @@ final class ClientShipStore {
     private int copies = 1;
     private long poseNanos = System.nanoTime();
     private static final Vector3f SPIN_AXIS = new Vector3f(0.3F, 1.0F, 0.2F).normalize();
+    // E5: the pose's position per client tick. Poses arrive tagged with their server tick and are applied one per
+    // client tick (prev -> cur), so a player the client carries moves in step with the ship it draws.
+    private final ArrayDeque<ShipPayloads.Pose> pending = new ArrayDeque<>();
+    private final ArrayDeque<ShipPayloads.Pose> applied = new ArrayDeque<>();
+    private Vec3 prevPos = Vec3.ZERO;
+    private Vec3 curPos = Vec3.ZERO;
+    private long curTick = -1;
+    private boolean havePose;
+    private int catchUps;
 
     void onSnapshot(ShipPayloads.Snapshot s) {
         origin = s.origin();
@@ -110,6 +120,99 @@ final class ClientShipStore {
         spinDegPerSec = p.spinDegPerSec();
         copies = p.copies();
         poseNanos = System.nanoTime();
+        if (!havePose) {
+            prevPos = posePos;
+            curPos = posePos;
+            curTick = p.tick();
+            remember(p);
+            havePose = true;
+        } else {
+            pending.add(p);
+        }
+    }
+
+    /**
+     * E5, once per client tick before the local player moves: applies the next pose and returns how far the ship
+     * moved this tick. If poses bunched up (a stall), it catches up to the newest at once.
+     */
+    Vec3 tickPose() {
+        prevPos = curPos;
+        ShipPayloads.Pose next = pending.poll();
+        while (next != null && pending.size() > 2) {
+            remember(next);
+            next = pending.poll();
+            catchUps++;
+        }
+        if (next != null) {
+            remember(next);
+            curPos = new Vec3(next.x(), next.y(), next.z());
+            curTick = next.tick();
+        }
+        return curPos.subtract(prevPos);
+    }
+
+    /**
+     * E5 hand-back: jumps to the pose of server tick {@code tick} (or the newest one before it) with no
+     * interpolation, because the server placed the player against exactly that pose. Older queued poses are dropped.
+     */
+    boolean snapTo(long tick) {
+        ShipPayloads.Pose best = null;
+        for (ShipPayloads.Pose p : applied) {
+            if (p.tick() <= tick && (best == null || p.tick() > best.tick())) {
+                best = p;
+            }
+        }
+        for (ShipPayloads.Pose p : pending) {
+            if (p.tick() <= tick && (best == null || p.tick() > best.tick())) {
+                best = p;
+            }
+        }
+        if (best == null) {
+            return false;
+        }
+        pending.removeIf(p -> p.tick() <= tick);
+        remember(best);
+        prevPos = new Vec3(best.x(), best.y(), best.z());
+        curPos = prevPos;
+        curTick = best.tick();
+        return true;
+    }
+
+    private void remember(ShipPayloads.Pose p) {
+        applied.add(p);
+        while (applied.size() > 64) {
+            applied.poll();
+        }
+    }
+
+    boolean hasPose() {
+        return havePose;
+    }
+
+    /** The pose position as drawn this frame: between the last two client ticks, like every entity. */
+    Vec3 renderPos(float partialTick) {
+        return prevPos.lerp(curPos, partialTick);
+    }
+
+    Vec3 curPos() {
+        return curPos;
+    }
+
+    long curTick() {
+        return curTick;
+    }
+
+    int pendingPoses() {
+        return pending.size();
+    }
+
+    int catchUps() {
+        return catchUps;
+    }
+
+    /** E5's carry and collision assume an unrotated ship. */
+    boolean axisAligned() {
+        return spinDegPerSec == 0 && baseRotation.equals(new Quaternionf(), 1e-6F);
     }
 
     /** The ship's orientation now: the base rotation, then the spin since the last pose. */
@@ -156,5 +259,8 @@ final class ClientShipStore {
         version++;
         states = null;
         blockEntities.clear();
+        pending.clear();
+        applied.clear();
+        havePose = false;
     }
 }

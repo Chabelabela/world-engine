@@ -73,6 +73,8 @@ final class ShipRenderer {
     private long gpuNanosSum;
     private int gpuSamples;
     private String summary = "";
+    /** E5: the ship centre drawn this frame (null if the spike didn't draw it), for the pop metrics. */
+    Vec3 lastDrawCentre;
 
     ShipRenderer(ClientShipStore ship) {
         this.ship = ship;
@@ -87,16 +89,23 @@ final class ShipRenderer {
         }
         lastFrameNanos = start;
         Minecraft mc = Minecraft.getInstance();
+        lastDrawCentre = null;
         if (mc.level != null && ship.has() && ship.copies() > 0) {
-            // The world's sky light just above the ship's box. (Sampling the pose's own block went to 0 as soon as the
-            // ship's centre dipped into terrain, blacking out the whole mesh.)
-            int skyMax = mc.level.getBrightness(LightLayer.SKY,
-                    BlockPos.containing(ship.posePos().add(0, ship.sizeY() / 2.0 + 1, 0)));
-            if (builtVersion != ship.version() || builtSkyMax != skyMax) {
-                rebuild(mc, skyMax);
-            }
-            if (totalQuads > 0) {
-                record(mc, pass);
+            Vec3 camera = mc.gameRenderer.mainCamera().position();
+            boolean shipFrame = E5Client.inShipFrame(camera);
+            // E5: at the plot in the ship frame, at the pose interpolated like an entity in the surface frame.
+            Vec3 centre = E5Client.drawCentre(camera, E5Client.partialTick());
+            if (centre != null) {
+                // The world's sky light just above the ship's box. (Sampling the pose's own block went to 0 as soon as
+                // the ship's centre dipped into terrain, blacking out the whole mesh.)
+                int skyMax = mc.level.getBrightness(LightLayer.SKY, BlockPos.containing(centre.add(0, ship.sizeY() / 2.0 + 1, 0)));
+                if (builtVersion != ship.version() || builtSkyMax != skyMax) {
+                    rebuild(mc, skyMax);
+                }
+                if (totalQuads > 0) {
+                    record(mc, pass, camera, centre, shipFrame ? new Quaternionf() : ship.rotationNow());
+                    lastDrawCentre = centre;
+                }
             }
             cpuNanosSum += System.nanoTime() - start;
         }
@@ -105,7 +114,7 @@ final class ShipRenderer {
         }
     }
 
-    private void record(Minecraft mc, RenderPass pass) {
+    private void record(Minecraft mc, RenderPass pass, Vec3 camera, Vec3 pose, Quaternionf rotation) {
         if (queries == null) {
             queries = RenderSystem.getDevice().createTimestampQueryPool(QUERY_SLOTS * 2);
         }
@@ -120,9 +129,6 @@ final class ShipRenderer {
         }
         pass.writeTimestamp(queries, slot * 2);
 
-        Vec3 camera = mc.gameRenderer.mainCamera().position();
-        Vec3 pose = ship.posePos();
-        Quaternionf rotation = ship.rotationNow();
         Matrix4f view = RenderSystem.getModelViewMatrixCopy();
         int copies = ship.copies();
         int side = (int) Math.ceil(Math.sqrt(copies));

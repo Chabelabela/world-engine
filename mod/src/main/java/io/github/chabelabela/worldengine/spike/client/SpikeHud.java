@@ -169,6 +169,11 @@ final class SpikeHud {
         String renderLine = renderer.hudLine();
         if (renderLine != null) {
             graphics.text(mc.font, renderLine, 4, y, 0xFF55FF55, true);
+            y += 10;
+        }
+        String e5Line = E5Client.hudLine();
+        if (e5Line != null) {
+            graphics.text(mc.font, e5Line, 4, y, 0xFFFF9955, true);
         }
     }
 

@@ -70,10 +70,12 @@ final class SpikeCommands {
         ServerTickEvents.END_SERVER_TICK.register(SpikeCommands::runPending);
         ServerTickEvents.END_SERVER_TICK.register(ShipSync::tick);
         ServerTickEvents.END_SERVER_TICK.register(Seams::tick);
+        ServerTickEvents.END_SERVER_TICK.register(Handoff::tick);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             PENDING.clear();
             ShipSync.reset();
             Seams.reset();
+            Handoff.reset();
         });
     }
 
@@ -130,6 +132,34 @@ final class SpikeCommands {
                                                                         EntityArgument.getPlayer(context, "player"),
                                                                         IntegerArgumentType.getInteger(context, "runs"),
                                                                         StringArgumentType.getString(context, "filter"))))))))
+                        .then(Commands.literal("e5")
+                                .then(Commands.literal("start")
+                                        .then(Commands.argument("player", EntityArgument.player())
+                                                .executes(context -> say(context.getSource(),
+                                                        Handoff.start(EntityArgument.getPlayer(context, "player"))))))
+                                .then(Commands.literal("trips")
+                                        .then(Commands.argument("n", IntegerArgumentType.integer(1, 50))
+                                                .executes(context -> say(context.getSource(), Handoff.trips(
+                                                        context.getSource().getServer(),
+                                                        IntegerArgumentType.getInteger(context, "n"))))))
+                                .then(Commands.literal("flags")
+                                        .then(Commands.argument("flags", IntegerArgumentType.integer(0, 63))
+                                                .executes(context -> {
+                                                    Handoff.flags = IntegerArgumentType.getInteger(context, "flags");
+                                                    Handoff.sendSettings(context.getSource().getServer(), "flags");
+                                                    return say(context.getSource(), "E5 flags " + Handoff.flags);
+                                                })))
+                                .then(Commands.literal("speed")
+                                        .then(Commands.argument("blocksPerSecond", FloatArgumentType.floatArg(1, 100))
+                                                .executes(context -> {
+                                                    Handoff.speed = FloatArgumentType.getFloat(context, "blocksPerSecond") / 20.0;
+                                                    return say(context.getSource(), Handoff.status());
+                                                })))
+                                .then(Commands.literal("stop").executes(context -> {
+                                    Handoff.stop();
+                                    return say(context.getSource(), Handoff.status());
+                                }))
+                                .then(Commands.literal("status").executes(context -> say(context.getSource(), Handoff.status()))))
                         .then(Commands.literal("e1")
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
@@ -671,5 +701,11 @@ final class SpikeCommands {
 
     private static void reply(CommandSourceStack source, String line) {
         source.sendSuccess(() -> Component.literal(line), true);
+    }
+
+    private static int say(CommandSourceStack source, String line) {
+        reply(source, line);
+        WorldEngineMod.LOGGER.info("[spike] {}", line);
+        return Command.SINGLE_SUCCESS;
     }
 }
