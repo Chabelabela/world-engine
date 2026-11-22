@@ -9,6 +9,7 @@ import io.github.chabelabela.worldengine.planet.Planets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.StreamSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -23,91 +24,106 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Seam crossing in a real server. The GameTest level is flat, but {@link SeamCrossingHandler} only needs level
  * coordinates, so these tests place a dropped item at the home planet's net coordinates and run the handler directly.
+ * Each test loads its chunks, waits until they are loaded and the item is in the level, then steps the item across
+ * an edge and runs the handler, all within one tick.
  */
 public class SeamGameTests {
     private static final PlanetLayout HOME = Planets.HOME.layout();
     private static final int N = Planets.HOME.cells();
     private static final double Y = 100.0;
+    /** Ticks to wait for force-loaded chunks to load and show their entities. */
+    private static final int SETTLE_TICKS = 5;
 
     @GameTest
     public void theEquatorWrapKeepsMomentum(GameTestHelper helper) {
-        try (Scene scene = new Scene(helper)) {
-            double z = HOME.faceOriginZ(PlanetFace.E3) + 100.5;
-            double east = HOME.faceOriginX(PlanetFace.E3) + N;
-            double west = HOME.faceOriginX(PlanetFace.E0);
-            Entity item = scene.item(east - 4.5, z, west, z);
+        double z = HOME.faceOriginZ(PlanetFace.E3) + 100.5;
+        double east = HOME.faceOriginX(PlanetFace.E3) + N;
+        double west = HOME.faceOriginX(PlanetFace.E0);
+        Scene.run(helper, east - 4.5, z, new double[] {east + 0.25, z, west, z}, (scene, item) -> {
             scene.move(item, east + 0.25, z, new Vec3(0.3, 0, 0), -90.0F);
             // Fold's point is 0.25 inside E0's west edge; it lands one tick (0.3) short of it.
             scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "across the equator wrap");
             // Now 0.05 blocks off E0's edge, but the cooldown stops it folding straight back.
             SeamCrossingHandler.tickLevel(helper.getLevel());
             scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
-        }
-        helper.succeed();
+        });
     }
 
     @GameTest
     public void aRotatedSeamTurnsMomentumAndLook(GameTestHelper helper) {
-        try (Scene scene = new Scene(helper)) {
-            int ox = HOME.faceOriginX(PlanetFace.NORTH);
-            int oz = HOME.faceOriginZ(PlanetFace.NORTH);
-            SeamCrossing fold = WorldEngineMod.core().seamCross(N, PlanetFace.NORTH.id(), -0.25, 100.5, -0.281, 0, 90);
-            double foldX = HOME.faceOriginX(PlanetFace.E0) + fold.x();
-            double foldZ = HOME.faceOriginZ(PlanetFace.E0) + fold.z();
-            Entity item = scene.item(ox + 3.5, oz + 100.5, foldX, foldZ);
+        int ox = HOME.faceOriginX(PlanetFace.NORTH);
+        int oz = HOME.faceOriginZ(PlanetFace.NORTH);
+        SeamCrossing fold = WorldEngineMod.core().seamCross(N, PlanetFace.NORTH.id(), -0.25, 100.5, -0.281, 0, 90);
+        double foldX = HOME.faceOriginX(PlanetFace.E0) + fold.x();
+        double foldZ = HOME.faceOriginZ(PlanetFace.E0) + fold.z();
+        Scene.run(helper, ox + 3.5, oz + 100.5, new double[] {ox - 0.25, oz + 100.5, foldX, foldZ}, (scene, item) -> {
             scene.move(item, ox - 0.25, oz + 100.5, new Vec3(-0.281, 0, 0), 90.0F);
             // North's west edge meets E0 three quarter turns round: running west carries on running south.
             scene.expect(item, foldX, foldZ - 0.281, 0.0, 0.281, 0.0F, "across North's west edge");
-        }
-        helper.succeed();
+        });
     }
 
     @GameTest
     public void beyondACornerItGoesBack(GameTestHelper helper) {
-        try (Scene scene = new Scene(helper)) {
-            int ox = HOME.faceOriginX(PlanetFace.E0);
-            int oz = HOME.faceOriginZ(PlanetFace.E0);
-            Entity item = scene.item(ox + 2.5, oz + 2.5, ox + 2.5, oz + 2.5);
+        int ox = HOME.faceOriginX(PlanetFace.E0);
+        int oz = HOME.faceOriginZ(PlanetFace.E0);
+        Scene.run(helper, ox + 2.5, oz + 2.5, new double[] {ox - 0.5, oz - 0.5}, (scene, item) -> {
             scene.move(item, ox - 0.5, oz - 0.5, new Vec3(-1, 0, -1), 135.0F);
             scene.expect(item, ox + 2.5, oz + 2.5, 0.0, 0.0, 135.0F, "back from beyond E0's north-west corner");
-        }
-        helper.succeed();
+        });
     }
 
     @GameTest
     public void edgesTheNetJoinsAreJustWalking(GameTestHelper helper) {
-        try (Scene scene = new Scene(helper)) {
-            double edge = HOME.faceOriginX(PlanetFace.E2);
-            double z = HOME.faceOriginZ(PlanetFace.E2) + 100.5;
-            Entity item = scene.item(edge - 2.5, z, edge + 0.5, z);
+        double edge = HOME.faceOriginX(PlanetFace.E2);
+        double z = HOME.faceOriginZ(PlanetFace.E2) + 100.5;
+        Scene.run(helper, edge - 2.5, z, new double[] {edge + 0.5, z}, (scene, item) -> {
             scene.move(item, edge + 0.5, z, new Vec3(0.3, 0, 0), -90.0F);
             scene.expect(item, edge + 0.5, z, 0.3, 0.0, -90.0F, "from E1 onto E2, untouched");
-        }
-        helper.succeed();
+        });
     }
 
-    /** Items at net coordinates, with their chunks loaded, cleaned up afterwards. */
-    private static final class Scene implements AutoCloseable {
+    /** One dropped item at net coordinates, with the chunks it uses kept loaded, cleaned up afterwards. */
+    private static final class Scene {
         private final GameTestHelper helper;
         private final ServerLevel level;
         private final List<ChunkPos> tickets = new ArrayList<>();
-        private final List<Entity> entities = new ArrayList<>();
 
-        Scene(GameTestHelper helper) {
+        private Scene(GameTestHelper helper) {
             this.helper = helper;
             this.level = helper.getLevel();
         }
 
-        /** A still item at (x, z), remembered by the handler; the chunks at (x, z) and (toX, toZ) are kept loaded. */
-        Entity item(double x, double z, double toX, double toZ) {
-            load(x, z);
-            load(toX, toZ);
-            ItemEntity item = new ItemEntity(level, x, Y, z, new ItemStack(Items.STONE));
+        /**
+         * Loads the chunks at (x, z) and at every {x, z} pair in {@code alsoLoad}, puts a still item at (x, z), and,
+         * once they have settled, checks the item is in the level, lets the handler remember it, and runs
+         * {@code steps}.
+         */
+        static void run(GameTestHelper helper, double x, double z, double[] alsoLoad, StepsBody steps) {
+            Scene scene = new Scene(helper);
+            scene.load(x, z);
+            for (int i = 0; i < alsoLoad.length; i += 2) {
+                scene.load(alsoLoad[i], alsoLoad[i + 1]);
+            }
+            ItemEntity item = new ItemEntity(scene.level, x, Y, z, new ItemStack(Items.STONE));
+            item.setNoGravity(true);
             item.setDeltaMovement(Vec3.ZERO);
-            level.addFreshEntity(item);
-            entities.add(item);
-            SeamCrossingHandler.tickLevel(level);
-            return item;
+            scene.level.addFreshEntity(item);
+            helper.runAfterDelay(SETTLE_TICKS, () -> {
+                try {
+                    helper.assertTrue(StreamSupport.stream(scene.level.getAllEntities().spliterator(), false)
+                            .anyMatch(e -> e == item), "the item is in the level's entity list");
+                    item.snapTo(x, Y, z, 0.0F, 0.0F);
+                    item.setDeltaMovement(Vec3.ZERO);
+                    SeamCrossingHandler.tickLevel(scene.level);
+                    steps.accept(scene, item);
+                    helper.succeed();
+                } finally {
+                    item.discard();
+                    scene.tickets.forEach(pos ->
+                            scene.level.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 1));
+                }
+            });
         }
 
         /** Moves the item (as its own tick would) and runs the handler once. */
@@ -118,8 +134,8 @@ public class SeamGameTests {
         }
 
         void expect(Entity item, double x, double z, double vx, double vz, float yaw, String what) {
-            String got = String.format(Locale.ROOT, "%s: at (%.6f, %.6f) moving (%.6f, %.6f) yaw %.2f", what, item.getX(), item.getZ(),
-                    item.getDeltaMovement().x, item.getDeltaMovement().z, item.getYRot());
+            String got = String.format(Locale.ROOT, "%s: at (%.6f, %.6f) moving (%.6f, %.6f) yaw %.2f", what,
+                    item.getX(), item.getZ(), item.getDeltaMovement().x, item.getDeltaMovement().z, item.getYRot());
             helper.assertTrue(Math.abs(item.getX() - x) < 1e-9 && Math.abs(item.getZ() - z) < 1e-9, got);
             helper.assertTrue(Math.abs(item.getY() - Y) < 1e-9, got + ": height kept");
             helper.assertTrue(Math.abs(item.getDeltaMovement().x - vx) < 1e-9
@@ -130,14 +146,13 @@ public class SeamGameTests {
         private void load(double x, double z) {
             ChunkPos pos = new ChunkPos((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4);
             level.getChunkSource().addTicketWithRadius(TicketType.FORCED, pos, 1);
-            level.getChunk(pos.x(), pos.z());
             tickets.add(pos);
         }
+    }
 
-        @Override
-        public void close() {
-            entities.forEach(Entity::discard);
-            tickets.forEach(pos -> level.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 1));
-        }
+    /** The part of a test that runs once its scene has settled. */
+    @FunctionalInterface
+    private interface StepsBody {
+        void accept(Scene scene, Entity item);
     }
 }
