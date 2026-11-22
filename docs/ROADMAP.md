@@ -444,4 +444,4 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 3. ~~Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md) and [M1c](superpowers/plans/2026-11-20-m1c-planet-terrain.md).~~ Done.
 4. ~~Execute the [M1d plan](superpowers/plans/2026-11-20-m1d-universe-level.md) (the universe level).~~ Done; the manual in-game checks (plan Task 11) are open.
 5. ~~**Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001.~~ Done: [ADR 0001](adr/0001-frames-and-handoff.md) accepted on 2026-11-22.
-6. Plan and execute M1e (seams) and M1f (per-planet time of day) from ADR 0001.
+6. Execute the [M1e-1 seam crossing plan](superpowers/plans/2026-11-22-m1e1-seam-crossing.md); then plan M1e-2 (overlap bands, edit mirroring) and M1f (per-planet time of day) from ADR 0001.
