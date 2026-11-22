@@ -1,5 +1,6 @@
 package io.github.chabelabela.worldengine;
 
+import io.github.chabelabela.worldengine.level.SeamCrossingHandler;
 import io.github.chabelabela.worldengine.level.UniverseBiomeSource;
 import io.github.chabelabela.worldengine.level.UniverseChunkGenerator;
 import io.github.chabelabela.worldengine.level.WorldStamp;
@@ -51,6 +52,7 @@ public final class WorldEngineMod implements ModInitializer {
         NativeCore loaded = loadCore();
         core = loaded;
         if (loaded != null) {
+            SeamCrossingHandler.register();
             ServerLifecycleEvents.SERVER_STARTED.register(server -> {
                 checkWorldStamp(server, loaded);
                 if (universe != null) {
