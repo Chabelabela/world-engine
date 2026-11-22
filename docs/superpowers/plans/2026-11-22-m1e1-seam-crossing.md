@@ -1267,13 +1267,14 @@ git push
 - **Other players** can drop out of view for up to about a second after one of them crosses a seam. It's the entity-tracking gap measured in E6; M2's membership tracking or a tracking re-check fixes it.
 - **Riders:** passengers aren't checked themselves, so they cross with their vehicle. Boats and minecarts are a manual check (Task 6).
 - **Entities crossing into unloaded chunks** are saved there by vanilla, as with any entity that moves into an unloaded area.
+- **Short teleports across a seam:** a command or portal move of 16 blocks or less (`MAX_STEP`) from near an edge to just beyond a seam looks like walking, so it is treated as a crossing.
 
 ## Self-review against ADR 0001 ("What M1e must do")
 
 | ADR requirement | Where |
 |---|---|
 | Teleport at `fold`'s point with `QuarterTurns`-rotated grid velocity and yaw | `we_seam_cross` (Task 1), `SeamCrossings.plan` (Task 3), `SeamCrossingHandler` (Task 4) |
-| Compensate the one-tick overshoot: land at `fold(p) − rotate(v)` | `SeamCrossings.plan`; tested in `SeamCrossingsTest` and `SeamGameTests` |
+| Compensate the one-tick overshoot: land at `fold(p) − rotate(v)` | **Players only** (their client advances once more; see the post-execution note): `SeamCrossings.plan` offers both points, and `SeamCrossingHandler` picks one. The player path has a unit test of `plan` but no GameTest yet. |
 | Hysteresis: mid-band, or a cooldown | A 3-tick cooldown (Task 4), as in E2. The mid-band teleport comes with M1e-2's bands. |
 | Pre-load the twin region | An expiring ticket on the far side for players within 64 blocks (Task 4). Getting chunks to the client *before* the crossing needs M1e-2's bands. |
 | Corners: no-man's land | Bounce back (Tasks 3–5) |
