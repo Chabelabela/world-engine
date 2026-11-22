@@ -259,7 +259,8 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - [M1b handoff spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md): an experiment plan that ends in an ADR.
 - [M1c planet terrain](superpowers/plans/2026-11-20-m1c-planet-terrain.md): detailed, with verified code. Done.
 - [M1d universe level](superpowers/plans/2026-11-20-m1d-universe-level.md): detailed; its code was built and GameTested in CI before the plan was written. Done.
-- [M1e-1 seam crossing](superpowers/plans/2026-11-22-m1e1-seam-crossing.md): detailed, built and GameTested in CI first. Done. M1e-2 (overlap bands, edit mirroring) is next.
+- [M1e-1 seam crossing](superpowers/plans/2026-11-22-m1e1-seam-crossing.md): detailed, built and GameTested in CI first. Done.
+- [M1e-2 overlap bands and edit mirroring](superpowers/plans/2026-11-22-m1e2-overlap-bands.md): detailed, built and GameTested in CI first (19 GameTests).
 - The M1c and M1d plans don't depend on the handoff design, so they are written before the ADR. The M1e and M1f plans are written from the ADR.
 - **Hard gate after M1d:** passed. The M1b spike ran, and [ADR 0001](adr/0001-frames-and-handoff.md) was accepted on 2026-11-22.
 - **Entry tasks from the M0 reviews:** done in M1a (see `docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md`). Remaining items have new homes:
@@ -446,4 +447,4 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 4. ~~Execute the [M1d plan](superpowers/plans/2026-11-20-m1d-universe-level.md) (the universe level).~~ Done; the manual in-game checks (plan Task 11) are open.
 5. ~~**Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001.~~ Done: [ADR 0001](adr/0001-frames-and-handoff.md) accepted on 2026-11-22.
 6. ~~Execute the [M1e-1 seam crossing plan](superpowers/plans/2026-11-22-m1e1-seam-crossing.md).~~ Done; its manual in-game checks (plan Task 6) are open.
-7. Plan and execute M1e-2 (overlap bands, edit mirroring) and M1f (per-planet time of day) from ADR 0001.
+7. Execute the [M1e-2 overlap bands plan](superpowers/plans/2026-11-22-m1e2-overlap-bands.md); then plan M1f (per-planet time of day) from ADR 0001.
