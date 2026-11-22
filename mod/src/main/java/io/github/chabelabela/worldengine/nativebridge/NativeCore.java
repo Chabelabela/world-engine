@@ -3,6 +3,7 @@ package io.github.chabelabela.worldengine.nativebridge;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
+import static java.lang.foreign.ValueLayout.JAVA_FLOAT;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
@@ -22,10 +23,13 @@ import java.util.Objects;
  * {@link #EXPECTED_ABI_VERSION} together with {@code WE_ABI_VERSION}.
  */
 public final class NativeCore {
-    public static final int EXPECTED_ABI_VERSION = 3;
+    public static final int EXPECTED_ABI_VERSION = 4;
 
     /** Largest region {@link #terrainColumns} accepts, in columns. */
     public static final int MAX_COLUMNS = 1 << 20; // keep equal to we_planet::MAX_COLUMNS
+
+    /** {@code WE_SEAM_NOT_FOLDABLE}: {@code we_seam_cross} left the point where it is. */
+    private static final int SEAM_NOT_FOLDABLE = 1;
 
     private final MethodHandle abiVersionFn;
     private final MethodHandle newDemoFn;
@@ -36,6 +40,7 @@ public final class NativeCore {
     private final MethodHandle bodyNameFn;
     private final MethodHandle terrainColumnsFn;
     private final MethodHandle terrainVersionFn;
+    private final MethodHandle seamCrossFn;
 
     private NativeCore(SymbolLookup lib) {
         Linker linker = Linker.nativeLinker();
@@ -56,6 +61,10 @@ public final class NativeCore {
                 FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT,
                         JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
         terrainVersionFn = linker.downcallHandle(find(lib, "we_terrain_version"), FunctionDescriptor.of(JAVA_INT));
+        seamCrossFn = linker.downcallHandle(
+                find(lib, "we_seam_cross"),
+                FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE,
+                        JAVA_FLOAT, ADDRESS));
     }
 
     /** Load the library at {@code library} for the lifetime of the JVM and check its ABI version. */
@@ -147,6 +156,29 @@ public final class NativeCore {
             return new TerrainColumns(countX, countZ,
                     heights.asSlice(0, n * Integer.BYTES).toArray(JAVA_INT),
                     biomes.asSlice(0, n).toArray(JAVA_BYTE));
+        } catch (Throwable t) {
+            throw wrap(t);
+        }
+    }
+
+    /**
+     * Carries grid point ({@code x}, {@code z}) of {@code face} (0-5), which lies beyond one of the face's edges, onto
+     * the neighbouring face of a planet with {@code cells} blocks per face edge, rotating the grid velocity
+     * ({@code vx} east, {@code vz} south) and the Minecraft {@code yaw} with it. Returns null if the point can't be
+     * folded: it is on its face, beyond a corner, or more than one face width out.
+     *
+     * <p>Stateless and thread-safe, like {@link #terrainColumns}.
+     */
+    public SeamCrossing seamCross(int cells, int face, double x, double z, double vx, double vz, float yaw) {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment out = arena.allocate(JAVA_DOUBLE, 7);
+            int status = (int) seamCrossFn.invokeExact(cells, face, x, z, vx, vz, yaw, out);
+            if (status == SEAM_NOT_FOLDABLE) {
+                return null;
+            }
+            check(status, "we_seam_cross");
+            double[] r = out.toArray(JAVA_DOUBLE);
+            return new SeamCrossing((int) r[0], r[1], r[2], (int) r[3], r[4], r[5], (float) r[6]);
         } catch (Throwable t) {
             throw wrap(t);
         }
