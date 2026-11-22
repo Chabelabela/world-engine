@@ -6,6 +6,23 @@ use worldengine_core::*;
 fn java_call_sequence() {
     assert_eq!(we_abi_version(), WE_ABI_VERSION);
     assert_eq!(we_terrain_version(), we_planet::TERRAIN_VERSION);
+    let mut crossed = [0.0f64; 7];
+    assert_eq!(
+        unsafe {
+            we_seam_cross(
+                16_384,
+                3,
+                16_384.25,
+                1.5,
+                0.0,
+                0.0,
+                0.0,
+                crossed.as_mut_ptr(),
+            )
+        },
+        WE_OK
+    );
+    assert_eq!(crossed[0], 0.0, "E3's east edge wraps onto E0");
     let universe = we_universe_new_demo();
     assert!(!universe.is_null());
     unsafe {
