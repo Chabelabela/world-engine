@@ -270,7 +270,7 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - `we-planet` v0: deterministic terrain height, climate and biomes as functions on the unit sphere, keyed by seed. **Done in M1c** ([plan](superpowers/plans/2026-11-20-m1c-planet-terrain.md)). Results are bit-identical on every platform (checked in CI on Linux x64/arm64, Windows and macOS), and a thread-safe batched FFI call serves chunk generation.
 - A **World Engine world preset**: the overworld becomes the universe level with the cross-net layout for the home planet and the moon. The Nether and End are left untouched for now. **Done in M1d** ([plan](superpowers/plans/2026-11-20-m1d-universe-level.md)).
 - A chunk generator that makes one batched FFI call per chunk (heights and biome ids), with vanilla features and structures layered on top through biomes. **Done in M1d**: GameTests in CI compare generated chunks block by block with the core; worlds are stamped with the terrain version.
-- Seams: overlap bands, edit mirroring, and entity teleport with rotated position, velocity and look direction.
+- Seams: overlap bands, edit mirroring, and entity teleport with rotated position, velocity and look direction. **Seam crossing done in M1e-1** ([plan](superpowers/plans/2026-11-22-m1e1-seam-crossing.md)); overlap bands and edit mirroring are M1e-2.
 - Per-planet time of day: the sun direction comes from planet rotation (mixins for sky angle and lighting, scoped to the universe level).
 
 **Exit:** walk or fly around the home planet's equator and over a pole, and return to the start. Terrain never visibly breaks at seams. Sunrise and sunset follow planet rotation. Fabric GameTests for seam crossing and edit mirroring pass. The handoff design record is accepted.
@@ -444,4 +444,5 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 3. ~~Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md) and [M1c](superpowers/plans/2026-11-20-m1c-planet-terrain.md).~~ Done.
 4. ~~Execute the [M1d plan](superpowers/plans/2026-11-20-m1d-universe-level.md) (the universe level).~~ Done; the manual in-game checks (plan Task 11) are open.
 5. ~~**Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001.~~ Done: [ADR 0001](adr/0001-frames-and-handoff.md) accepted on 2026-11-22.
-6. Execute the [M1e-1 seam crossing plan](superpowers/plans/2026-11-22-m1e1-seam-crossing.md); then plan M1e-2 (overlap bands, edit mirroring) and M1f (per-planet time of day) from ADR 0001.
+6. ~~Execute the [M1e-1 seam crossing plan](superpowers/plans/2026-11-22-m1e1-seam-crossing.md).~~ Done; its manual in-game checks (plan Task 6) are open.
+7. Plan and execute M1e-2 (overlap bands, edit mirroring) and M1f (per-planet time of day) from ADR 0001.

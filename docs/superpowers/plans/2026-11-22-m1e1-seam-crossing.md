@@ -37,6 +37,15 @@
 - ✅ **The plan reproduces that code:** replaying this plan's steps onto a clean `e2c777b` gives the same files, byte for byte, as the tree CI built and tested.
 - ⚠️ **Not checked:** crossing seams by hand in a real client. That covers how the chunk pop looks (E2 measured 60–260 ms), and boats or minecarts with riders. Task 6 lists the manual checks.
 
+**Post-execution note (2026-11-22):** executed with Haiku implementers and Sonnet reviewers. Every task's files matched the CI-verified reference byte for byte. The code reviews then found two real problems, fixed in one follow-up commit (`6c3820c`), so **the repository, not these code blocks, is authoritative**:
+- **The one-tick step-back now applies to players only.** It exists because a player's client advances once more after a teleport (E2). Items and mobs, which the server moves, already had this tick's movement, so they land at fold's point. A player whose step-back point would be off the net also lands at fold's point, so they can't be left beyond the edge and folded back after the cooldown. The GameTests, which use items, now expect fold's point.
+- **Teleports away aren't undone.** Something that moved more than `SeamCrossings.MAX_STEP` (16 blocks) along either axis since its last position was teleported: a command, a portal, and later the ship handoff to the shipyard. It is left alone and forgotten, where before it would have been "bounced" back. There's a new unit test and GameTest for this.
+- **Smaller fixes:**
+  - the handler's state is cleared when a server starts (singleplayer reuses the JVM);
+  - deferred teleports skip entities removed in the meantime;
+  - `we_seam_cross` writes its results unaligned-safe;
+  - the `farSides` test checks the exact points it folds.
+
 **Environment note:** without JDK 25 (as in Claude cloud sessions), skip the `./gradlew` steps and rely on CI (Task 6). Don't download JDKs. Rust steps always run locally. The pure planet tests can run on any JDK ≥ 21 with the JUnit console launcher.
 
 ---
