@@ -58,8 +58,11 @@ pub unsafe extern "C" fn we_seam_cross(
             nvz,
             f64::from(folded.turns.rotate_yaw(yaw)),
         ];
-        // SAFETY: the caller guarantees `out` is valid for 7 f64 writes.
-        unsafe { std::ptr::copy_nonoverlapping(result.as_ptr(), out, result.len()) };
+        for (i, v) in result.into_iter().enumerate() {
+            // SAFETY: the caller guarantees `out` is valid for 7 f64 writes
+            // (`i < 7`); `write_unaligned` doesn't need it to be aligned.
+            unsafe { out.add(i).write_unaligned(v) };
+        }
         WE_OK
     })
 }

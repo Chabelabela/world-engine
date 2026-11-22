@@ -35,13 +35,12 @@ public class SeamGameTests {
         double z = HOME.faceOriginZ(PlanetFace.E3) + 100.5;
         double east = HOME.faceOriginX(PlanetFace.E3) + N;
         double west = HOME.faceOriginX(PlanetFace.E0);
-        Scene.run(helper, east - 4.5, z, new double[] {east + 0.25, z, west + 0.25 - 0.3, z}, (scene, item) -> {
+        Scene.run(helper, east - 4.5, z, new double[] {east + 0.25, z, west + 0.25, z}, (scene, item) -> {
             scene.move(item, east + 0.25, z, new Vec3(0.3, 0, 0), -90.0F);
-            // Fold's point is 0.25 inside E0's west edge; it lands one tick (0.3) short of it.
-            scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "across the equator wrap");
-            // Now 0.05 blocks off E0's edge, but the cooldown stops it folding straight back.
+            // Fold's point is 0.25 inside E0's west edge; an item lands there (only players land one tick short).
+            scene.expect(item, west + 0.25, z, 0.3, 0.0, -90.0F, "across the equator wrap");
             SeamCrossingHandler.checkNow(helper.getLevel(), item);
-            scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
+            scene.expect(item, west + 0.25, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
         });
     }
 
@@ -52,11 +51,24 @@ public class SeamGameTests {
         SeamCrossing fold = WorldEngineMod.core().seamCross(N, PlanetFace.NORTH.id(), -0.25, 100.5, -0.281, 0, 90);
         double foldX = HOME.faceOriginX(PlanetFace.E0) + fold.x();
         double foldZ = HOME.faceOriginZ(PlanetFace.E0) + fold.z();
-        double[] load = {ox - 0.25, oz + 100.5, foldX, foldZ - 0.281};
+        double[] load = {ox - 0.25, oz + 100.5, foldX, foldZ};
         Scene.run(helper, ox + 3.5, oz + 100.5, load, (scene, item) -> {
             scene.move(item, ox - 0.25, oz + 100.5, new Vec3(-0.281, 0, 0), 90.0F);
-            // North's west edge meets E0 three quarter turns round: running west carries on running south.
-            scene.expect(item, foldX, foldZ - 0.281, 0.0, 0.281, 0.0F, "across North's west edge");
+            // North's west edge meets E0 three quarter turns round: running west carries on running south. The item
+            // lands at fold's point; only players land one tick short.
+            scene.expect(item, foldX, foldZ, 0.0, 0.281, 0.0F, "across North's west edge");
+        });
+    }
+
+    @GameTest
+    public void aFarTeleportIsNotUndone(GameTestHelper helper) {
+        double west = HOME.faceOriginX(PlanetFace.E0);
+        double z = HOME.faceOriginZ(PlanetFace.E0) + 100.5;
+        double far = west - 1_000 + 0.5;
+        Scene.run(helper, west + 2.5, z, new double[] {far, z}, (scene, item) -> {
+            // Commanded far away, off the net: it is not carried or put back.
+            scene.move(item, far, z, Vec3.ZERO, 0.0F);
+            scene.expect(item, far, z, 0.0, 0.0, 0.0F, "teleported far off the net");
         });
     }
 

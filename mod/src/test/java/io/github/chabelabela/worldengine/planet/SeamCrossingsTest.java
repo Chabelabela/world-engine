@@ -38,7 +38,7 @@ class SeamCrossingsTest {
     }
 
     @Test
-    void aCrossingLandsOneTickShortOfFoldsPoint() {
+    void aCrossingOffersFoldsPointAndOneTickShortOfIt() {
         SeamCrossings.Outcome outcome =
                 SeamCrossings.plan(E3_EAST - 4.5, 100.5, E3_EAST + 0.25, 100.5, 0.3, 0, -90, WRAP);
         SeamCrossings.Cross cross = assertInstanceOf(SeamCrossings.Cross.class, outcome);
@@ -52,6 +52,12 @@ class SeamCrossingsTest {
         assertEquals(0.3, cross.vx());
         assertEquals(0.0, cross.vz());
         assertEquals(-90.0F, cross.yaw());
+    }
+
+    @Test
+    void somethingTeleportedFarAwayIsLeftAlone() {
+        assertNull(SeamCrossings.plan(HOME.faceOriginX(PlanetFace.E0) + 2.5, 100.5,
+                HOME.faceOriginX(PlanetFace.E0) - 20_000 + 0.5, 100.5, -1, 0, 0, WRAP));
     }
 
     @Test
@@ -92,8 +98,11 @@ class SeamCrossingsTest {
 
     @Test
     void farSidesAreOnlyTheSeams() {
-        SeamCrossings.Folder anywhere = (cells, face, x, z, vx, vz, yaw) ->
-                new SeamCrossing(PlanetFace.E2.id(), 1.0, 2.0, 0, vx, vz, yaw);
+        List<Object[]> calls = new ArrayList<>();
+        SeamCrossings.Folder anywhere = (cells, face, x, z, vx, vz, yaw) -> {
+            calls.add(new Object[] {face, x, z});
+            return new SeamCrossing(PlanetFace.E2.id(), 1.0, 2.0, 0, vx, vz, yaw);
+        };
         // Every edge of E1 is joined in the net (E0, E2, North, South): nothing to pre-load.
         assertTrue(SeamCrossings.farSides(new PlanetHit(Planets.HOME, new FaceCell(PlanetFace.E1, 3, 3)), 16, anywhere)
                 .isEmpty());
@@ -101,8 +110,13 @@ class SeamCrossingsTest {
         List<double[]> sides =
                 SeamCrossings.farSides(new PlanetHit(Planets.HOME, new FaceCell(PlanetFace.E0, 3, 3)), 16, anywhere);
         assertEquals(2, sides.size());
-        assertArrayEquals(new double[] {HOME.faceOriginX(PlanetFace.E2) + 1.0, HOME.faceOriginZ(PlanetFace.E2) + 2.0},
-                sides.get(0));
+        double[] far = {HOME.faceOriginX(PlanetFace.E2) + 1.0, HOME.faceOriginZ(PlanetFace.E2) + 2.0};
+        assertArrayEquals(far, sides.get(0));
+        assertArrayEquals(far, sides.get(1));
+        // Straight across the west edge, then across the north edge.
+        assertEquals(2, calls.size());
+        assertArrayEquals(new Object[] {PlanetFace.E0, -0.5, 3.5}, calls.get(0));
+        assertArrayEquals(new Object[] {PlanetFace.E0, 3.5, -0.5}, calls.get(1));
         // Away from E0's edges: none.
         assertTrue(SeamCrossings.farSides(new PlanetHit(Planets.HOME, new FaceCell(PlanetFace.E0, 500, 500)), 16,
                 anywhere).isEmpty());

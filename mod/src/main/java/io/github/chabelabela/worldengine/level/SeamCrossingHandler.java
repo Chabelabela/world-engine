@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -29,8 +30,9 @@ import net.minecraft.world.phys.Vec3;
  *
  * <ul>
  *   <li>Entities within {@link #EDGE_MARGIN} blocks of a face edge have their position remembered. One that is then
- *       on no face has left across a seam, and is teleported to fold's point, one tick of travel short, with its
- *       grid velocity and yaw turned.
+ *       on no face has left across a seam, and is teleported to fold's point (a player one tick of travel short of
+ *       it, as its client advances once more after the teleport), with its grid velocity and yaw turned. One that
+ *       moved further than {@link SeamCrossings#MAX_STEP} was teleported away, and is left alone.
  *   <li>Beyond a cube corner there is no neighbour: it goes back to where it last stood, with no horizontal speed.
  *   <li>After a crossing, an entity isn't checked for {@link #COOLDOWN_TICKS} ticks, so one that lands less than a
  *       tick of travel inside the new face doesn't fold straight back.
@@ -64,6 +66,11 @@ public final class SeamCrossingHandler {
         preloadTicket = Registry.register(BuiltInRegistries.TICKET_TYPE, WorldEngineMod.id("seam_preload"),
                 new TicketType(PRELOAD_TICKS, TicketType.FLAG_LOADING | TicketType.FLAG_SIMULATION));
         ServerTickEvents.END_SERVER_TICK.register(SeamCrossingHandler::onEndTick);
+        // Tick counts and positions are per server run; they must not survive a singleplayer stop and start.
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            LAST_ON_NET.clear();
+            COOLDOWN_UNTIL.clear();
+        });
     }
 
     private static void onEndTick(MinecraftServer server) {
@@ -150,15 +157,30 @@ public final class SeamCrossingHandler {
         if (outcome instanceof SeamCrossings.Cross cross) {
             LAST_ON_NET.put(id, new double[] {cross.foldX(), cross.foldZ()});
             COOLDOWN_UNTIL.put(id, now + COOLDOWN_TICKS);
-            return () -> entity.teleport(new TeleportTransition(level,
-                    new Vec3(cross.x(), entity.getY(), cross.z()), new Vec3(cross.vx(), velocity.y, cross.vz()),
-                    cross.yaw(), entity.getXRot(), TeleportTransition.DO_NOTHING));
+            // Only a player's client advances once more after the teleport. If that landing isn't on the net (the
+            // player is blocked or stopped, so the client won't advance), use fold's point: never leave it off the net.
+            boolean shortOfFold = entity instanceof ServerPlayer
+                    && Planets.at(Mth.floor(cross.x()), Mth.floor(cross.z())) != null;
+            double landX = shortOfFold ? cross.x() : cross.foldX();
+            double landZ = shortOfFold ? cross.z() : cross.foldZ();
+            return () -> {
+                if (!entity.isRemoved()) {
+                    entity.teleport(new TeleportTransition(level, new Vec3(landX, entity.getY(), landZ),
+                            new Vec3(cross.vx(), velocity.y, cross.vz()), cross.yaw(), entity.getXRot(),
+                            TeleportTransition.DO_NOTHING));
+                }
+            };
         }
         if (outcome instanceof SeamCrossings.Bounce bounce) {
-            return () -> entity.teleport(new TeleportTransition(level,
-                    new Vec3(bounce.x(), entity.getY(), bounce.z()), new Vec3(0, velocity.y, 0),
-                    entity.getYRot(), entity.getXRot(), TeleportTransition.DO_NOTHING));
+            return () -> {
+                if (!entity.isRemoved()) {
+                    entity.teleport(new TeleportTransition(level, new Vec3(bounce.x(), entity.getY(), bounce.z()),
+                            new Vec3(0, velocity.y, 0), entity.getYRot(), entity.getXRot(),
+                            TeleportTransition.DO_NOTHING));
+                }
+            };
         }
+        LAST_ON_NET.remove(id); // off the net and not crossing: it was teleported away
         return null;
     }
 

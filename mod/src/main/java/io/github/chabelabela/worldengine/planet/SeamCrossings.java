@@ -8,11 +8,17 @@ import java.util.List;
  * What happens to something that steps off a planet's net across a seam: one of the 7 cube edges that the
  * cross-shaped net doesn't join (ADR 0001; E2 in the M1b spike).
  *
- * <p>It lands on the neighbouring face at {@code we_frames::CubeSphere::fold}'s point, keeping its height, with its
- * grid velocity and yaw turned by the fold's quarter turns. Beyond a cube corner there is no neighbour, so it is put
- * back where it last stood on the net.
+ * <p>It lands on the neighbouring face at {@code we_frames::CubeSphere::fold}'s point (for a player, one tick of
+ * travel short of it, see {@link Cross}), keeping its height, with its grid velocity and yaw turned by the fold's
+ * quarter turns. Beyond a cube corner there is no neighbour, so it is put back where it last stood on the net.
  */
 public final class SeamCrossings {
+    /**
+     * Something that moved further than this along either axis since its last position was teleported (a command, a
+     * portal, a ship handoff), not walking, so it is left alone.
+     */
+    public static final int MAX_STEP = 16;
+
     /** Folds grid point (x, z) beyond an edge of {@code face}; null if it can't. In the mod: {@code NativeCore::seamCross}. */
     @FunctionalInterface
     public interface Folder {
@@ -26,7 +32,9 @@ public final class SeamCrossings {
     /**
      * Teleport to level position ({@code x}, {@code z}) on {@code face}, keeping the height, with horizontal velocity
      * ({@code vx}, {@code vz}) and {@code yaw}. ({@code foldX}, {@code foldZ}) is fold's point itself, always on the
-     * face.
+     * face. ({@code x}, {@code z}) is fold's point minus one tick of (rotated) travel: a player's client advances one
+     * more step right after a teleport, so that is where a player should land. Anything else has already had this
+     * tick's movement applied, and lands at fold's point.
      */
     public record Cross(PlanetSpec planet, PlanetFace face, double x, double z, double vx, double vz, float yaw,
             double foldX, double foldZ) implements Outcome {
@@ -42,14 +50,19 @@ public final class SeamCrossings {
     /**
      * The outcome for something now at level position ({@code x}, {@code z}), moving ({@code vx}, {@code vz}) blocks
      * per tick and looking along {@code yaw}, whose last position on a planet's net was ({@code lastX}, {@code lastZ}).
-     * Null if it is on a face (crossing an edge the net joins is just walking) or its last position wasn't on a planet.
+     * Null if it is on a face (crossing an edge the net joins is just walking), it moved further than
+     * {@link #MAX_STEP} since (it was teleported), or its last position wasn't on a planet.
      *
-     * <p>The landing point is one tick of (rotated) travel short of fold's point. A client advances one more step
-     * right after a teleport, so without this every crossing would gain a tick of travel (E2).
+     * <p>The {@link Cross} has two landing points: fold's point, and one tick of (rotated) travel short of it. For a
+     * player's client, which advances one more step right after a teleport, the latter keeps a crossing from gaining a
+     * tick of travel (E2).
      */
     public static Outcome plan(double lastX, double lastZ, double x, double z, double vx, double vz, float yaw,
             Folder folder) {
         if (Planets.at(floor(x), floor(z)) != null) {
+            return null;
+        }
+        if (Math.abs(x - lastX) > MAX_STEP || Math.abs(z - lastZ) > MAX_STEP) {
             return null;
         }
         PlanetHit last = Planets.at(floor(lastX), floor(lastZ));
