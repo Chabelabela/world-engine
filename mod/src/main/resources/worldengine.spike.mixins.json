@@ -13,7 +13,8 @@
     "ClientPacketListenerSpikeMixin",
     "RenderSectionRegionSpikeMixin",
     "EnvironmentAttributeProbeSpikeMixin",
-    "GameRendererSpikeMixin"
+    "GameRendererSpikeMixin",
+    "PacketDecoderSpikeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

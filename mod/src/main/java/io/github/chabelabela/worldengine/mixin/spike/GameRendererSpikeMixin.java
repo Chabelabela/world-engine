@@ -14,6 +14,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(GameRenderer.class)
 abstract class GameRendererSpikeMixin {
+    /** E6: the frame starts; packets handled since the last tick may have moved a peer the spike placed. */
+    @Inject(method = "update", at = @At("HEAD"))
+    private void worldengine$frameStart(CallbackInfo ci) {
+        SpikeClient.beforeFrame();
+    }
+
     @Inject(method = "tryTakeScreenshotIfNeeded", at = @At("HEAD"))
     private void worldengine$levelDrawn(CallbackInfo ci) {
         SpikeClient.afterLevelDrawn();

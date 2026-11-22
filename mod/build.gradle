@@ -110,11 +110,18 @@ loom {
             configName = 'Spike client (joins localhost)'
             programArgs '--quickPlayMultiplayer', 'localhost:25565', '--username', 'SpikeA'
         }
+        // M1b spike (E6): a second client, in its own directory, as a second fixed user.
+        spikeClientB {
+            inherit client
+            configName = 'Spike client B (joins localhost)'
+            runDir 'run-b'
+            programArgs '--quickPlayMultiplayer', 'localhost:25565', '--username', 'SpikeB'
+        }
     }
 }
 
 tasks.configureEach {
-    if (name in ['runClient', 'runServer', 'runGameTest', 'runSpikeClient']) {
+    if (name in ['runClient', 'runServer', 'runGameTest', 'runSpikeClient', 'runSpikeClientB']) {
         dependsOn cargoBuild
     }
 }

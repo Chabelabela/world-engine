@@ -63,6 +63,8 @@ public final class Spike {
                 .register(ShipPayloads.FrameSwitch.TYPE, ShipPayloads.FrameSwitch.CODEC);
         net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
                 .register(ShipPayloads.E5Settings.TYPE, ShipPayloads.E5Settings.CODEC);
+        net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay()
+                .register(ShipPayloads.PeerRel.TYPE, ShipPayloads.PeerRel.CODEC);
         net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.serverboundPlay()
                 .register(ShipPayloads.Rel.TYPE, ShipPayloads.Rel.CODEC);
         net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(ShipPayloads.Rel.TYPE,

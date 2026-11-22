@@ -49,6 +49,21 @@ public final class SpikeClient implements ClientModInitializer {
         }
     }
 
+    /** From {@code PacketDecoderSpikeMixin}, on the netty thread: one received packet and its decoded size. */
+    public static void packetReceived(net.minecraft.network.ConnectionProtocol protocol, net.minecraft.network.protocol.Packet<?> packet,
+                                      int bytes) {
+        if (renderer != null && protocol == net.minecraft.network.ConnectionProtocol.PLAY) {
+            E6Client.countPacket(packet, bytes);
+        }
+    }
+
+    /** From {@code GameRendererSpikeMixin}, every frame before the camera update (packets are handled by now). */
+    public static void beforeFrame() {
+        if (renderer != null) {
+            E6Client.beforeFrame(net.minecraft.client.Minecraft.getInstance());
+        }
+    }
+
     public static void beforePlayerTick(LocalPlayer player) {
         if (renderer != null) {
             E5Client.beforePlayerTick(player);
@@ -96,15 +111,21 @@ public final class SpikeClient implements ClientModInitializer {
             }
             ClientShipStore ship = new ClientShipStore();
             E5Client.init(ship);
+            E6Client.init(ship);
             ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.Snapshot.TYPE, (payload, context) -> ship.onSnapshot(payload));
             ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.Delta.TYPE, (payload, context) -> ship.onDelta(payload));
             ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.Forget.TYPE, (payload, context) -> ship.onForget(payload));
-            ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.Pose.TYPE, (payload, context) -> ship.onPose(payload));
+            ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.Pose.TYPE, (payload, context) -> {
+                ship.onPose(payload);
+                E6Client.posesReceived++;
+            });
+            ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.PeerRel.TYPE, (payload, context) -> E6Client.onPeerRel(payload));
             ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.FrameSwitch.TYPE, (payload, context) -> E5Client.onFrameSwitch(payload));
             ClientPlayNetworking.registerGlobalReceiver(ShipPayloads.E5Settings.TYPE, (payload, context) -> E5Client.onSettings(payload));
             ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
                 ship.clear();
                 E5Client.reset();
+                E6Client.reset();
             });
             renderer = new ShipRenderer(ship);
             backdrop = new BackdropRenderer();
@@ -112,6 +133,7 @@ public final class SpikeClient implements ClientModInitializer {
             SpikeHud hud = new SpikeHud(ship, renderer);
             HudElementRegistry.addLast(WorldEngineMod.id("spike_hud"), hud::extractRenderState);
             ClientTickEvents.END_CLIENT_TICK.register(hud::endTick);
+            ClientTickEvents.END_CLIENT_TICK.register(E6Client::endTick);
             ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> hud.screenOpened(screen));
         }
     }

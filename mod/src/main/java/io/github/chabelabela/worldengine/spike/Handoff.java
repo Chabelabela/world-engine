@@ -2,6 +2,7 @@ package io.github.chabelabela.worldengine.spike;
 
 import io.github.chabelabela.worldengine.WorldEngineMod;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -42,7 +43,7 @@ public final class Handoff {
     static double apex = 200;
     /** Blocks per tick: 0.5 = 10 blocks/s. */
     static double speed = 0.5;
-    static final int HOVER_TICKS = 40;
+    static int hoverTicks = 40;
     static final int REST_TICKS = 60;
     /** The surface under the ship is ticketed this many ticks before the hand-back (E1's best pre-load). */
     static final int PRELOAD_TICKS = 60;
@@ -53,6 +54,8 @@ public final class Handoff {
     static final int START_Z = 256;
     /** Where the player stands aboard (ship cells) and looks: west, through the port wall, a little down. */
     static final Vec3 ABOARD = new Vec3(4.5, 1.0, 4.5);
+    /** E6: where the second, third… player stands (in front of the first one's view, off to the side). */
+    static final Vec3[] MORE_ABOARD = {new Vec3(2.5, 1.0, 3.5), new Vec3(2.5, 1.0, 5.5), new Vec3(4.5, 1.0, 2.5)};
     static final float VIEW_YAW = 90.0F;
     static final float VIEW_PITCH = 20.0F;
 
@@ -83,14 +86,33 @@ public final class Handoff {
         handoffsDown = 0;
     }
 
-    /** From the client, whenever its ship-relative position changes. Runs on the server thread. */
+    /**
+     * From the client, whenever its ship-relative position changes. Runs on the server thread. E6: relayed to every
+     * other player who has the ship, so they can draw this player against the ship as they draw it.
+     */
     static void onRel(ServerPlayer player, ShipPayloads.Rel rel) {
         REL.put(player.getUUID(), rel);
+        ShipPayloads.PeerRel peer = new ShipPayloads.PeerRel(player.getId(), rel.shipFrame(), rel.aboard(), rel.x(), rel.y(),
+                rel.z(), rel.poseTick());
+        for (ServerPlayer other : player.level().getServer().getPlayerList().getPlayers()) {
+            if (other != player && ShipSync.tracking(other)) {
+                ServerPlayNetworking.send(other, peer);
+            }
+        }
     }
 
     /** Rests the ship over the planet and stands {@code player} aboard, still, looking out of the port wall. */
     static String start(ServerPlayer player) {
-        ServerLevel level = player.level();
+        return start(List.of(player));
+    }
+
+    /** E6: the same with several players aboard: the first at {@link #ABOARD}, the others at {@link #MORE_ABOARD}. */
+    static String start(List<ServerPlayer> players) {
+        if (players.isEmpty() || players.size() > 1 + MORE_ABOARD.length) {
+            return "E5/E6 start takes 1 to " + (1 + MORE_ABOARD.length) + " players";
+        }
+        ServerPlayer first = players.get(0);
+        ServerLevel level = first.level();
         MinecraftServer server = level.getServer();
         level.getChunk(START_X >> 4, START_Z >> 4);
         int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, START_X, START_Z);
@@ -105,17 +127,21 @@ public final class Handoff {
         ShipSync.broadcastPose(server);
         phase = Phase.IDLE;
         trip = 0;
-        // The ship must be on the client before the player lands in it, or they fall through the floor.
-        ShipSync.ensureTracked(server, player);
-        REL.remove(player.getUUID());
-        player.setGameMode(GameType.CREATIVE);
-        player.getAbilities().flying = false;
-        player.onUpdateAbilities();
-        Vec3 aboard = ShipSync.cellOrigin(restPose).add(ABOARD);
-        player.teleport(new TeleportTransition(level, aboard, Vec3.ZERO, VIEW_YAW, VIEW_PITCH, TeleportTransition.DO_NOTHING));
+        StringBuilder who = new StringBuilder();
+        for (int i = 0; i < players.size(); i++) {
+            ServerPlayer player = players.get(i);
+            // The ship must be on the client before the player lands in it, or they fall through the floor.
+            ShipSync.ensureTracked(server, player);
+            REL.remove(player.getUUID());
+            player.setGameMode(GameType.CREATIVE);
+            player.getAbilities().flying = false;
+            player.onUpdateAbilities();
+            Vec3 aboard = ShipSync.cellOrigin(restPose).add(i == 0 ? ABOARD : MORE_ABOARD[i - 1]);
+            player.teleport(new TeleportTransition(level, aboard, Vec3.ZERO, VIEW_YAW, VIEW_PITCH, TeleportTransition.DO_NOTHING));
+            who.append(i == 0 ? "" : ", ").append(player.getGameProfile().name()).append(" at ").append(fmt(aboard));
+        }
         sendSettings(server, "start");
-        return String.format(Locale.ROOT, "Ship resting at %s (ground y=%d), %s aboard at %s", fmt(restPose), ground,
-                player.getGameProfile().name(), fmt(aboard));
+        return String.format(Locale.ROOT, "Ship resting at %s (ground y=%d), aboard: %s", fmt(restPose), ground, who);
     }
 
     /** Starts {@code n} round trips from the resting pose. */
@@ -131,7 +157,7 @@ public final class Handoff {
     }
 
     static int tripTicks() {
-        return (int) Math.ceil(2 * apex / speed) + HOVER_TICKS + REST_TICKS;
+        return (int) Math.ceil(2 * apex / speed) + hoverTicks + REST_TICKS;
     }
 
     static void stop() {
@@ -188,7 +214,7 @@ public final class Handoff {
                 }
             }
             case HOVER -> {
-                if (phaseTicks >= HOVER_TICKS) {
+                if (phaseTicks >= hoverTicks) {
                     enter(Phase.DESCEND);
                 }
             }
@@ -261,8 +287,8 @@ public final class Handoff {
         if (restPose == null) {
             return "E5 not started";
         }
-        return String.format(Locale.ROOT, "E5 %s: trip %d/%d, alt %.1f, handoffs up %d / down %d, flags %d",
-                phase, trip, trips, ShipSync.pose.y - restPose.y, handoffsUp, handoffsDown, flags);
+        return String.format(Locale.ROOT, "E5 %s: trip %d/%d, alt %.1f, handoffs up %d / down %d, flags %d, hover %d ticks",
+                phase, trip, trips, ShipSync.pose.y - restPose.y, handoffsUp, handoffsDown, flags, hoverTicks);
     }
 
     private static String fmt(Vec3 v) {

@@ -190,6 +190,9 @@ final class E5Client {
             WorldEngineMod.LOGGER.info(String.format(Locale.ROOT, "[spike] E5 client teleport id %d relatives %s -> (%.3f, %.3f, %.3f)",
                     packet.id(), packet.relatives(), player.getX(), player.getY(), player.getZ()));
         }
+        // Report again after any teleport, even to the same ship-relative spot: the server forgets the last report
+        // when it places players (E6 found a re-placed player who was never handed off because nothing changed).
+        lastSent = null;
         if (pendingSwitch == null || ship == null) {
             return;
         }

@@ -203,6 +203,12 @@ public final class ShipPayloads {
         public static final int CAPTURE = 16;
         /** Also save the frames around each switch as PNGs. */
         public static final int CAPTURE_FRAMES = 32;
+        /** E6: log every client tick where this client and each other player stand relative to the ship, and bytes. */
+        public static final int TRACK = 64;
+        /** E6: draw other players aboard from their ship-relative position ({@link PeerRel}), not vanilla's copy. */
+        public static final int FIX_PEERS = 128;
+        /** E6: ignore this client's movement keys (so a measured run can't be disturbed by stray input). */
+        public static final int HOLD = 256;
         public static final int ALL_FIXES = FIX_RENDERER | FIX_CLOUDS | FIX_SKY | FIX_BACKDROP;
 
         public static final Type<E5Settings> TYPE = new Type<>(WorldEngineMod.id("e5_settings"));
@@ -275,5 +281,29 @@ public final class ShipPayloads {
             bes.put(cell, ByteBufCodecs.TRUSTED_COMPOUND_TAG.decode(buf));
         }
         return bes;
+    }
+
+    /**
+     * Server to client, E6: another player's {@link Rel}, relayed as it arrives. {@code entityId} is that player's
+     * entity on this client.
+     */
+    public record PeerRel(int entityId, boolean shipFrame, boolean aboard, double x, double y, double z, long poseTick)
+            implements CustomPacketPayload {
+        public static final Type<PeerRel> TYPE = new Type<>(WorldEngineMod.id("peer_rel"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, PeerRel> CODEC = CustomPacketPayload.codec((p, buf) -> {
+            buf.writeVarInt(p.entityId);
+            buf.writeBoolean(p.shipFrame);
+            buf.writeBoolean(p.aboard);
+            buf.writeDouble(p.x);
+            buf.writeDouble(p.y);
+            buf.writeDouble(p.z);
+            buf.writeVarLong(p.poseTick);
+        }, buf -> new PeerRel(buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readDouble(), buf.readDouble(),
+                buf.readDouble(), buf.readVarLong()));
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
     }
 }

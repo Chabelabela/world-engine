@@ -143,7 +143,7 @@ final class SpikeCommands {
                                                         context.getSource().getServer(),
                                                         IntegerArgumentType.getInteger(context, "n"))))))
                                 .then(Commands.literal("flags")
-                                        .then(Commands.argument("flags", IntegerArgumentType.integer(0, 63))
+                                        .then(Commands.argument("flags", IntegerArgumentType.integer(0, 511))
                                                 .executes(context -> {
                                                     Handoff.flags = IntegerArgumentType.getInteger(context, "flags");
                                                     Handoff.sendSettings(context.getSource().getServer(), "flags");
@@ -160,6 +160,26 @@ final class SpikeCommands {
                                     return say(context.getSource(), Handoff.status());
                                 }))
                                 .then(Commands.literal("status").executes(context -> say(context.getSource(), Handoff.status()))))
+                        .then(Commands.literal("e6")
+                                .then(Commands.literal("start")
+                                        .then(Commands.argument("players", EntityArgument.players())
+                                                .executes(context -> say(context.getSource(), Handoff.start(
+                                                        EntityArgument.getPlayers(context, "players").stream()
+                                                                .sorted(java.util.Comparator.comparing(p -> p.getGameProfile().name()))
+                                                                .toList())))))
+                                .then(Commands.literal("hover")
+                                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
+                                                .executes(context -> {
+                                                    Handoff.hoverTicks = IntegerArgumentType.getInteger(context, "seconds") * 20;
+                                                    return say(context.getSource(), Handoff.status());
+                                                })))
+                                .then(Commands.literal("label")
+                                        .then(Commands.argument("label", StringArgumentType.greedyString())
+                                                .executes(context -> {
+                                                    String label = StringArgumentType.getString(context, "label");
+                                                    Handoff.sendSettings(context.getSource().getServer(), label);
+                                                    return say(context.getSource(), "E6 label \"" + label + "\", flags " + Handoff.flags);
+                                                }))))
                         .then(Commands.literal("e1")
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))

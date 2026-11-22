@@ -6,6 +6,7 @@
 /mod/build/
 /mod/run/
 /mod/run-server/
+/mod/run-b/
 /mod/.idea/
 *.iml
 
