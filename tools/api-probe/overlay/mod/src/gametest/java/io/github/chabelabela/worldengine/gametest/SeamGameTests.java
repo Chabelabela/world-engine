@@ -23,27 +23,26 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Seam crossing in a real server. The GameTest level is flat, but {@link SeamCrossingHandler} only needs level
- * coordinates, so these tests place a dropped item at the home planet's net coordinates and run the handler directly.
- * Each test loads its chunks, waits until they are loaded and the item is in the level, then steps the item across
- * an edge and runs the handler, all within one tick.
+ * coordinates, so these tests place a dropped item at the home planet's net coordinates and run the handler directly,
+ * all within one tick. Every chunk a test touches is loaded first: an entity moved into a chunk that isn't loaded
+ * drops out of the level's entity list, so the handler wouldn't see it.
  */
 public class SeamGameTests {
     private static final PlanetLayout HOME = Planets.HOME.layout();
     private static final int N = Planets.HOME.cells();
     private static final double Y = 100.0;
-    /** Ticks to wait for force-loaded chunks to load and show their entities. */
-    private static final int SETTLE_TICKS = 5;
 
     @GameTest
     public void theEquatorWrapKeepsMomentum(GameTestHelper helper) {
         double z = HOME.faceOriginZ(PlanetFace.E3) + 100.5;
         double east = HOME.faceOriginX(PlanetFace.E3) + N;
         double west = HOME.faceOriginX(PlanetFace.E0);
-        Scene.run(helper, east - 4.5, z, new double[] {east + 0.25, z, west, z}, (scene, item) -> {
+        Scene.run(helper, east - 4.5, z, new double[] {east + 0.25, z, west + 0.25 - 0.3, z}, (scene, item) -> {
             scene.move(item, east + 0.25, z, new Vec3(0.3, 0, 0), -90.0F);
             // Fold's point is 0.25 inside E0's west edge; it lands one tick (0.3) short of it.
             scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "across the equator wrap");
             // Now 0.05 blocks off E0's edge, but the cooldown stops it folding straight back.
+            scene.assertInLevel(item, "after landing");
             SeamCrossingHandler.tickLevel(helper.getLevel());
             scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
         });
@@ -56,7 +55,8 @@ public class SeamGameTests {
         SeamCrossing fold = WorldEngineMod.core().seamCross(N, PlanetFace.NORTH.id(), -0.25, 100.5, -0.281, 0, 90);
         double foldX = HOME.faceOriginX(PlanetFace.E0) + fold.x();
         double foldZ = HOME.faceOriginZ(PlanetFace.E0) + fold.z();
-        Scene.run(helper, ox + 3.5, oz + 100.5, new double[] {ox - 0.25, oz + 100.5, foldX, foldZ}, (scene, item) -> {
+        double[] load = {ox - 0.25, oz + 100.5, foldX, foldZ - 0.281};
+        Scene.run(helper, ox + 3.5, oz + 100.5, load, (scene, item) -> {
             scene.move(item, ox - 0.25, oz + 100.5, new Vec3(-0.281, 0, 0), 90.0F);
             // North's west edge meets E0 three quarter turns round: running west carries on running south.
             scene.expect(item, foldX, foldZ - 0.281, 0.0, 0.281, 0.0F, "across North's west edge");
@@ -95,9 +95,9 @@ public class SeamGameTests {
         }
 
         /**
-         * Loads the chunks at (x, z) and at every {x, z} pair in {@code alsoLoad}, puts a still item at (x, z), and,
-         * once they have settled, checks the item is in the level, lets the handler remember it, and runs
-         * {@code steps}.
+         * Loads the chunks at (x, z) and at every {x, z} pair in {@code alsoLoad} (where the steps move the item and
+         * where it lands), puts a still item at (x, z), lets the handler remember it, runs {@code steps}, and cleans
+         * up.
          */
         static void run(GameTestHelper helper, double x, double z, double[] alsoLoad, StepsBody steps) {
             Scene scene = new Scene(helper);
@@ -109,27 +109,27 @@ public class SeamGameTests {
             item.setNoGravity(true);
             item.setDeltaMovement(Vec3.ZERO);
             scene.level.addFreshEntity(item);
-            helper.runAfterDelay(SETTLE_TICKS, () -> {
-                try {
-                    helper.assertTrue(StreamSupport.stream(scene.level.getAllEntities().spliterator(), false)
-                            .anyMatch(e -> e == item), "the item is in the level's entity list");
-                    item.snapTo(x, Y, z, 0.0F, 0.0F);
-                    item.setDeltaMovement(Vec3.ZERO);
-                    SeamCrossingHandler.tickLevel(scene.level);
-                    steps.accept(scene, item);
-                    helper.succeed();
-                } finally {
-                    item.discard();
-                    scene.tickets.forEach(pos ->
-                            scene.level.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 1));
-                }
-            });
+            try {
+                scene.assertInLevel(item, "after spawning");
+                SeamCrossingHandler.tickLevel(scene.level);
+                steps.accept(scene, item);
+                helper.succeed();
+            } finally {
+                item.discard();
+                scene.tickets.forEach(pos -> scene.level.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 1));
+            }
+        }
+
+        void assertInLevel(Entity item, String when) {
+            helper.assertTrue(StreamSupport.stream(level.getAllEntities().spliterator(), false).anyMatch(e -> e == item),
+                    "the item is in the level's entity list " + when);
         }
 
         /** Moves the item (as its own tick would) and runs the handler once. */
         void move(Entity item, double x, double z, Vec3 velocity, float yaw) {
             item.snapTo(x, Y, z, yaw, 0.0F);
             item.setDeltaMovement(velocity);
+            assertInLevel(item, "after moving");
             SeamCrossingHandler.tickLevel(level);
         }
 
@@ -146,6 +146,7 @@ public class SeamGameTests {
         private void load(double x, double z) {
             ChunkPos pos = new ChunkPos((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4);
             level.getChunkSource().addTicketWithRadius(TicketType.FORCED, pos, 1);
+            level.getChunk(pos.x(), pos.z());
             tickets.add(pos);
         }
     }
