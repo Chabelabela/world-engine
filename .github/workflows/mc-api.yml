@@ -1,0 +1,37 @@
+# Planning aid: builds and GameTests draft code from tools/api-probe/overlay/ (copied over the checkout in
+# CI only) against the real Minecraft classpath. Not part of the build; deleted once the plan is written.
+name: mc-api
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/mc-api.yml'
+      - 'tools/api-probe/**'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply the draft overlay
+        run: cp -rv tools/api-probe/overlay/. . | sed 's#^.*overlay/##'
+      - name: Rust checks
+        working-directory: core
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+      - name: Build, unit-test and GameTest the draft
+        working-directory: mod
+        timeout-minutes: 25
+        run: ./gradlew build --continue --stacktrace
+      - name: Test reports on failure
+        if: failure()
+        working-directory: mod
+        run: |
+          find build/test-results -name '*.xml' -exec grep -l '<failure' {} \; | while read -r f; do echo "::group::$f"; grep -A15 '<failure' "$f" | head -60; echo "::endgroup::"; done

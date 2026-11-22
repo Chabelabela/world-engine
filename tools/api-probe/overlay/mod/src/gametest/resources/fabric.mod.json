@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "worldengine-gametest",
+  "version": "1.0.0",
+  "name": "World Engine GameTests",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "io.github.chabelabela.worldengine.gametest.UniverseGameTests",
+      "io.github.chabelabela.worldengine.gametest.SeamGameTests"
+    ]
+  },
+  "depends": {
+    "worldengine": "*"
+  }
+}
