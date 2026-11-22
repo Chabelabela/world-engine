@@ -27,7 +27,6 @@ public final class NativeCore {
 
     /** Largest region {@link #terrainColumns} accepts, in columns. */
     public static final int MAX_COLUMNS = 1 << 20; // keep equal to we_planet::MAX_COLUMNS
-
     /** {@code WE_SEAM_NOT_FOLDABLE}: {@code we_seam_cross} left the point where it is. */
     private static final int SEAM_NOT_FOLDABLE = 1;
 
