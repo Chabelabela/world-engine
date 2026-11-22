@@ -6,7 +6,8 @@
   "environment": "*",
   "entrypoints": {
     "fabric-gametest": [
-      "io.github.chabelabela.worldengine.gametest.UniverseGameTests"
+      "io.github.chabelabela.worldengine.gametest.UniverseGameTests",
+      "io.github.chabelabela.worldengine.gametest.SeamGameTests"
     ]
   },
   "depends": {
