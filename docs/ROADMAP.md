@@ -111,6 +111,8 @@ flowchart TB
 | World storage | **One "universe" level**. Planets are cube-sphere faces laid out as flat regions. Ships live in a shipyard region. | — |
 | Rendering | Minecraft's GPU abstraction only. Don't replace the chunk renderer before 1.0. | M10 |
 | Networking | Fabric custom payloads. The server is authoritative and clients interpolate. | — |
+| Ship sync | **Snapshot payload plus deltas.** Clients get each ship's blocks on first sight, then block deltas, and keep their own copy, independent of vanilla's chunks ([ADR 0001](adr/0001-frames-and-handoff.md)). | Ships outgrow one snapshot (M2 splits them) |
+| Ship rendering | **World Engine draws every ship itself**, from the client's copy, in both frames, through vanilla's moving-block pipelines. Vanilla's mesher never draws a ship's plot ([ADR 0001](adr/0001-frames-and-handoff.md)). | Sodium needs its own mesher hook (M2) |
 | Persistence | Simulation state is serialized by the core (versioned schema) into the world folder and saved alongside chunks. | — |
 
 ### 4.3 The spatial model (the central design problem)
@@ -149,9 +151,16 @@ One Minecraft dimension, seen from above (not to scale; faces separated by unuse
   +---+---+---+---+---+---+
 ```
 
-**Ships.** A ship's blocks always live in its shipyard plot, axis-aligned, so block interaction, redstone and block entities work normally. The ship is rendered and collided at its simulated transform, wherever that is. The surface frame uses this approach the same way Valkyrien Skies does. While the ship flies low over a planet, players aboard stay in the surface frame and are carried along with it.
+**Ships.** A ship's blocks always live in its shipyard plot, axis-aligned, so block interaction, redstone and block entities work normally. The ship is rendered and collided at its simulated transform, wherever that is. The surface frame uses this approach the same way Valkyrien Skies does. While the ship flies low over a planet, players aboard stay in the surface frame and are carried along with it, by their own client: one ship pose per tick, collision with the ship's block shapes, and a report of where they stand relative to the ship. Clients receive each ship's blocks as a snapshot payload on first sight, then deltas, and keep their own copy. World Engine renders every ship itself from that copy, in both frames, and vanilla never meshes a ship's plot ([ADR 0001](adr/0001-frames-and-handoff.md)).
 
 **Handoff between surface and orbit.** When a ship climbs above ~1.5 km or exceeds ~150 m/s, players aboard are handed from the surface frame into the ship frame. Their entity moves to the same spot inside the shipyard plot, and the planet outside is drawn from the simulation (M4). The transfer back happens below ~1.2 km and ~120 m/s. The gap between the two thresholds prevents flickering between frames. Position and velocity are carried across through the cube-sphere projection, accounting for the planet's rotation. Tests enforce round-trip error under 1 cm and 1 mm/s. "Seamless" means no loading screen and no visual pop, *not* that the entity never moves inside the level.
+
+**How the handoff works** ([ADR 0001](adr/0001-frames-and-handoff.md), measured in the M1b spike):
+- Every switch is a server-initiated teleport within the one universe level, so there is never a loading screen.
+- Going up, the server places each player at the ship-relative spot their own client reports. Coming down, it sends the pose tick it used, and the client snaps its ship to that pose.
+- Players aboard see each other through relayed ship-relative positions, and always track each other while on the same ship.
+- "No visual pop" depends on three things: the planet drawn identically in both frames (M4); sky, fog and clouds computed from the ship's surface-equivalent position, not the plot's coordinates; and the ship's light reaching things aboard (M2).
+- The thresholds stay at about 1.5 km and 1.2 km. At that altitude vanilla terrain is out of render range, so the switch can't show terrain loading in.
 
 ### 4.4 Reference scale (initial values, tunable)
 
@@ -251,7 +260,7 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - [M1c planet terrain](superpowers/plans/2026-11-20-m1c-planet-terrain.md): detailed, with verified code. Done.
 - [M1d universe level](superpowers/plans/2026-11-20-m1d-universe-level.md): detailed; its code was built and GameTested in CI before the plan was written.
 - The M1c and M1d plans don't depend on the handoff design, so they are written before the ADR. The M1e and M1f plans are written from the ADR.
-- **Hard gate after M1d:** nothing after M1d (M1e, M1f, M2 and later) starts until the M1b spike is done and ADR 0001 is accepted.
+- **Hard gate after M1d:** passed. The M1b spike ran, and [ADR 0001](adr/0001-frames-and-handoff.md) was accepted on 2026-11-22.
 - **Entry tasks from the M0 reviews:** done in M1a (see `docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md`). Remaining items have new homes:
   - Thread-safe batched chunk generation is designed into M1c.
   - The clock source and debug-command permissions move to M3, with `we-sim`.
@@ -434,4 +443,5 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 2. Settle the open decisions above, especially the licence.
 3. ~~Execute [M1a](superpowers/plans/2026-11-20-m1a-foundations-and-frames.md) and [M1c](superpowers/plans/2026-11-20-m1c-planet-terrain.md).~~ Done.
 4. ~~Execute the [M1d plan](superpowers/plans/2026-11-20-m1d-universe-level.md) (the universe level).~~ Done; the manual in-game checks (plan Task 11) are open.
-5. **Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001. Nothing after M1d starts before this.
+5. ~~**Gate:** run the [M1b spike](superpowers/plans/2026-11-20-m1b-handoff-spike.md) on the owner's PC and accept ADR 0001.~~ Done: [ADR 0001](adr/0001-frames-and-handoff.md) accepted on 2026-11-22.
+6. Plan and execute M1e (seams) and M1f (per-planet time of day) from ADR 0001.

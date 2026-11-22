@@ -1,6 +1,6 @@
 # ADR 0001: Frames and the surface ↔ ship handoff
 
-- Status: proposed
+- Status: **accepted** (2026-11-22, by the owner; merged as proposed in #4)
 - Date: 2026-11-22
 - Deciders: Chabelabela (owner)
 - Evidence: the M1b spike, experiments E1–E6, run 2026-11-21/22 on Minecraft 26.3 with Fabric, on the [`spike/m1-handoff`](https://github.com/Chabelabela/world-engine/tree/spike/m1-handoff) branch. The links below need that branch on GitHub. The spike code stays there and doesn't merge.
