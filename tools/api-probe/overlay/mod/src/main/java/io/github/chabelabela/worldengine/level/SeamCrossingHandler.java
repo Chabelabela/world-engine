@@ -76,63 +76,90 @@ public final class SeamCrossingHandler {
         }
     }
 
-    /** Checks every entity in {@code level} once. Public for GameTests, which run in a flat test level. */
-    public static void tickLevel(ServerLevel level) {
-        NativeCore core = PlanetTerrain.core();
-        SeamCrossings.Folder folder = (cells, face, x, z, vx, vz, yaw) ->
-                core.seamCross(cells, face.id(), x, z, vx, vz, yaw);
+    /** Checks every entity in {@code level} once. */
+    private static void tickLevel(ServerLevel level) {
+        SeamCrossings.Folder folder = folder();
         long now = level.getServer().getTickCount();
         List<Runnable> moves = new ArrayList<>();
         for (Entity entity : level.getAllEntities()) {
-            if (entity.isPassenger() || entity.isRemoved() || entity.isSpectator()) {
-                continue;
-            }
-            UUID id = entity.getUUID();
-            Long until = COOLDOWN_UNTIL.get(id);
-            if (until != null) {
-                if (until > now) {
-                    continue;
-                }
-                COOLDOWN_UNTIL.remove(id);
-            }
-            double x = entity.getX();
-            double z = entity.getZ();
-            PlanetHit hit = Planets.at(Mth.floor(x), Mth.floor(z));
-            if (hit != null) {
-                if (SeamCrossings.nearEdge(hit, EDGE_MARGIN)) {
-                    LAST_ON_NET.put(id, new double[] {x, z});
-                } else {
-                    LAST_ON_NET.remove(id);
-                }
-                if (entity instanceof ServerPlayer && now % PRELOAD_REFRESH_TICKS == 0
-                        && SeamCrossings.nearEdge(hit, PRELOAD_MARGIN)) {
-                    for (double[] side : SeamCrossings.farSides(hit, PRELOAD_MARGIN, folder)) {
-                        level.getChunkSource().addTicketWithRadius(preloadTicket,
-                                new ChunkPos(Mth.floor(side[0]) >> 4, Mth.floor(side[1]) >> 4), PRELOAD_RADIUS);
-                    }
-                }
-                continue;
-            }
-            double[] last = LAST_ON_NET.get(id);
-            if (last == null) {
-                continue;
-            }
-            Vec3 velocity = entity instanceof ServerPlayer player ? player.getKnownMovement() : entity.getDeltaMovement();
-            SeamCrossings.Outcome outcome = SeamCrossings.plan(last[0], last[1], x, z, velocity.x, velocity.z,
-                    entity.getYRot(), folder);
-            if (outcome instanceof SeamCrossings.Cross cross) {
-                LAST_ON_NET.put(id, new double[] {cross.foldX(), cross.foldZ()});
-                COOLDOWN_UNTIL.put(id, now + COOLDOWN_TICKS);
-                moves.add(() -> entity.teleport(new TeleportTransition(level,
-                        new Vec3(cross.x(), entity.getY(), cross.z()), new Vec3(cross.vx(), velocity.y, cross.vz()),
-                        cross.yaw(), entity.getXRot(), TeleportTransition.DO_NOTHING)));
-            } else if (outcome instanceof SeamCrossings.Bounce bounce) {
-                moves.add(() -> entity.teleport(new TeleportTransition(level,
-                        new Vec3(bounce.x(), entity.getY(), bounce.z()), new Vec3(0, velocity.y, 0),
-                        entity.getYRot(), entity.getXRot(), TeleportTransition.DO_NOTHING)));
+            Runnable move = check(level, entity, now, folder);
+            if (move != null) {
+                moves.add(move);
             }
         }
         moves.forEach(Runnable::run); // after the loop: never move entities while iterating the level's list
+    }
+
+    /**
+     * Checks one entity now, and moves it if it has crossed. For GameTests: they run in a flat test level, where an
+     * entity in a chunk loaded that same tick may not be in the level's entity list yet.
+     */
+    public static void checkNow(ServerLevel level, Entity entity) {
+        Runnable move = check(level, entity, level.getServer().getTickCount(), folder());
+        if (move != null) {
+            move.run();
+        }
+    }
+
+    private static SeamCrossings.Folder folder() {
+        NativeCore core = PlanetTerrain.core();
+        return (cells, face, x, z, vx, vz, yaw) -> core.seamCross(cells, face.id(), x, z, vx, vz, yaw);
+    }
+
+    /**
+     * Remembers {@code entity} near an edge, pre-loads the far side for a player near a seam, and returns the
+     * teleport to run if it has left the net, or null.
+     */
+    private static Runnable check(ServerLevel level, Entity entity, long now, SeamCrossings.Folder folder) {
+        if (entity.isPassenger() || entity.isRemoved() || entity.isSpectator()) {
+            return null;
+        }
+        UUID id = entity.getUUID();
+        Long until = COOLDOWN_UNTIL.get(id);
+        if (until != null) {
+            if (until > now) {
+                return null;
+            }
+            COOLDOWN_UNTIL.remove(id);
+        }
+        double x = entity.getX();
+        double z = entity.getZ();
+        PlanetHit hit = Planets.at(Mth.floor(x), Mth.floor(z));
+        if (hit != null) {
+            if (SeamCrossings.nearEdge(hit, EDGE_MARGIN)) {
+                LAST_ON_NET.put(id, new double[] {x, z});
+            } else {
+                LAST_ON_NET.remove(id);
+            }
+            if (entity instanceof ServerPlayer && now % PRELOAD_REFRESH_TICKS == 0
+                    && SeamCrossings.nearEdge(hit, PRELOAD_MARGIN)) {
+                for (double[] side : SeamCrossings.farSides(hit, PRELOAD_MARGIN, folder)) {
+                    level.getChunkSource().addTicketWithRadius(preloadTicket,
+                            new ChunkPos(Mth.floor(side[0]) >> 4, Mth.floor(side[1]) >> 4), PRELOAD_RADIUS);
+                }
+            }
+            return null;
+        }
+        double[] last = LAST_ON_NET.get(id);
+        if (last == null) {
+            return null;
+        }
+        Vec3 velocity = entity instanceof ServerPlayer player ? player.getKnownMovement() : entity.getDeltaMovement();
+        SeamCrossings.Outcome outcome =
+                SeamCrossings.plan(last[0], last[1], x, z, velocity.x, velocity.z, entity.getYRot(), folder);
+        if (outcome instanceof SeamCrossings.Cross cross) {
+            LAST_ON_NET.put(id, new double[] {cross.foldX(), cross.foldZ()});
+            COOLDOWN_UNTIL.put(id, now + COOLDOWN_TICKS);
+            return () -> entity.teleport(new TeleportTransition(level,
+                    new Vec3(cross.x(), entity.getY(), cross.z()), new Vec3(cross.vx(), velocity.y, cross.vz()),
+                    cross.yaw(), entity.getXRot(), TeleportTransition.DO_NOTHING));
+        }
+        if (outcome instanceof SeamCrossings.Bounce bounce) {
+            return () -> entity.teleport(new TeleportTransition(level,
+                    new Vec3(bounce.x(), entity.getY(), bounce.z()), new Vec3(0, velocity.y, 0),
+                    entity.getYRot(), entity.getXRot(), TeleportTransition.DO_NOTHING));
+        }
+        return null;
     }
 
     /** Drops remembered state for entities that no longer exist anywhere. */

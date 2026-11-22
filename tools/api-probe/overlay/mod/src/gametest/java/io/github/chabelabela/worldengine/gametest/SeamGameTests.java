@@ -9,7 +9,6 @@ import io.github.chabelabela.worldengine.planet.Planets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.StreamSupport;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -23,9 +22,8 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Seam crossing in a real server. The GameTest level is flat, but {@link SeamCrossingHandler} only needs level
- * coordinates, so these tests place a dropped item at the home planet's net coordinates and run the handler directly,
- * all within one tick. Every chunk a test touches is loaded first: an entity moved into a chunk that isn't loaded
- * drops out of the level's entity list, so the handler wouldn't see it.
+ * coordinates, so these tests place a dropped item at the home planet's net coordinates and run the handler's check on
+ * it directly ({@link SeamCrossingHandler#checkNow}), all within one tick, with every chunk they touch loaded.
  */
 public class SeamGameTests {
     private static final PlanetLayout HOME = Planets.HOME.layout();
@@ -42,8 +40,7 @@ public class SeamGameTests {
             // Fold's point is 0.25 inside E0's west edge; it lands one tick (0.3) short of it.
             scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "across the equator wrap");
             // Now 0.05 blocks off E0's edge, but the cooldown stops it folding straight back.
-            scene.assertInLevel(item, "after landing");
-            SeamCrossingHandler.tickLevel(helper.getLevel());
+            SeamCrossingHandler.checkNow(helper.getLevel(), item);
             scene.expect(item, west + 0.25 - 0.3, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
         });
     }
@@ -110,8 +107,7 @@ public class SeamGameTests {
             item.setDeltaMovement(Vec3.ZERO);
             scene.level.addFreshEntity(item);
             try {
-                scene.assertInLevel(item, "after spawning");
-                SeamCrossingHandler.tickLevel(scene.level);
+                SeamCrossingHandler.checkNow(scene.level, item);
                 steps.accept(scene, item);
                 helper.succeed();
             } finally {
@@ -120,17 +116,11 @@ public class SeamGameTests {
             }
         }
 
-        void assertInLevel(Entity item, String when) {
-            helper.assertTrue(StreamSupport.stream(level.getAllEntities().spliterator(), false).anyMatch(e -> e == item),
-                    "the item is in the level's entity list " + when);
-        }
-
-        /** Moves the item (as its own tick would) and runs the handler once. */
+        /** Moves the item (as its own tick would) and checks it once. */
         void move(Entity item, double x, double z, Vec3 velocity, float yaw) {
             item.snapTo(x, Y, z, yaw, 0.0F);
             item.setDeltaMovement(velocity);
-            assertInLevel(item, "after moving");
-            SeamCrossingHandler.tickLevel(level);
+            SeamCrossingHandler.checkNow(level, item);
         }
 
         void expect(Entity item, double x, double z, double vx, double vz, float yaw, String what) {
