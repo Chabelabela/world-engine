@@ -5,11 +5,13 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import io.github.chabelabela.worldengine.level.LocalSkies;
 import io.github.chabelabela.worldengine.level.PlanetTerrain;
 import io.github.chabelabela.worldengine.level.UniverseChunkGenerator;
 import io.github.chabelabela.worldengine.nativebridge.NativeCore;
 import io.github.chabelabela.worldengine.nativebridge.TerrainColumns;
 import io.github.chabelabela.worldengine.planet.FaceCell;
+import io.github.chabelabela.worldengine.planet.LocalTime;
 import io.github.chabelabela.worldengine.planet.PlanetFace;
 import io.github.chabelabela.worldengine.planet.PlanetHit;
 import io.github.chabelabela.worldengine.planet.PlanetSpec;
@@ -70,9 +72,10 @@ final class WorldEngineCommands {
             } else {
                 int[] twin = band.twinBlock(x, z);
                 reply(source, String.format(Locale.ROOT,
-                        "(%d, %d): %s, the band beyond %s's %s edge, %.0f blocks deep, copying %s at (%d, %d)",
+                        "(%d, %d): %s, the band beyond %s's %s edge, %.0f blocks deep, copying %s at (%d, %d)%s",
                         x, z, band.planet().name(), band.face(), band.side().name().toLowerCase(Locale.ROOT),
-                        Math.floor(band.depth(x + 0.5, z + 0.5)), band.twinFace(), twin[0], twin[1]));
+                        Math.floor(band.depth(x + 0.5, z + 0.5)), band.twinFace(), twin[0], twin[1],
+                        localTime(source, position)));
             }
             return Command.SINGLE_SUCCESS;
         }
@@ -83,9 +86,24 @@ final class WorldEngineCommands {
         FaceCell cell = hit.cell();
         String note = source.getServer().overworld().getChunkSource().getGenerator() instanceof UniverseChunkGenerator
                 ? "" : " (layout only: this world isn't a World Engine universe)";
-        reply(source, String.format(Locale.ROOT, "(%d, %d): %s, face %s, cell (%d, %d), %d m, %s%s",
-                x, z, hit.planet().name(), cell.face(), cell.x(), cell.z(), column.height(0, 0), column.biome(0, 0), note));
+        reply(source, String.format(Locale.ROOT, "(%d, %d): %s, face %s, cell (%d, %d), %d m, %s%s%s",
+                x, z, hit.planet().name(), cell.face(), cell.x(), cell.z(), column.height(0, 0), column.biome(0, 0),
+                localTime(source, position), note));
         return Command.SINGLE_SUCCESS;
+    }
+
+    /** ", local time 14:30 at 12.3° N 45.6° E" for a position on a planet or in a band; "" elsewhere (M1f). */
+    private static String localTime(CommandSourceStack source, Vec3 position) {
+        LocalSkies.Place place = LocalSkies.at(position.x(), position.z());
+        if (place == null) {
+            return "";
+        }
+        long ticks = LocalTime.localTicks(source.getLevel().getDefaultClockTime(), place.sky().longitude(),
+                place.planet().dayTicks());
+        double latitude = Math.toDegrees(place.sky().latitude());
+        double longitude = Math.toDegrees(place.sky().longitude());
+        return String.format(Locale.ROOT, ", local time %s at %.1f° %s %.1f° %s", LocalTime.format(ticks),
+                Math.abs(latitude), latitude >= 0 ? "N" : "S", Math.abs(longitude), longitude >= 0 ? "E" : "W");
     }
 
     /** Teleports the player to dry land near {@code name}'s E1 centre. */
