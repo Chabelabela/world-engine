@@ -1,0 +1,108 @@
+plugins {
+    // Minecraft 26.1+ is unobfuscated: use the non-remapping Loom plugin, no mappings.
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    testImplementation platform("org.junit:junit-bom:${project.junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+}
+
+java {
+    withSourcesJar()
+}
+
+// ---------------------------------------------------------------------------
+// Rust core: build it, bundle it as natives/<os>-<arch>/<lib> inside the jar.
+// Must match NativePlatform.java.
+// ---------------------------------------------------------------------------
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def osArch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+def hostOs = osName.startsWith('windows') ? 'windows' : (osName.startsWith('mac') ? 'macos' : 'linux')
+def hostArch = (osArch in ['amd64', 'x86_64']) ? 'x86_64' : ((osArch in ['aarch64', 'arm64']) ? 'aarch64' : osArch)
+def hostKey = "${hostOs}-${hostArch}"
+def hostLibName = [windows: 'worldengine_core.dll', macos: 'libworldengine_core.dylib'].get(hostOs, 'libworldengine_core.so')
+def hostLibrary = file("../core/target/release/${hostLibName}")
+
+def cargoBuild = tasks.register('cargoBuild', Exec) {
+    description = 'Builds the Rust core (we-ffi) for the host platform.'
+    workingDir = file('../core')
+    commandLine 'cargo', 'build', '--release', '-p', 'we-ffi'
+    inputs.dir(file('../core/crates'))
+    inputs.files(file('../core/Cargo.toml'), file('../core/Cargo.lock'), file('../core/rust-toolchain.toml'))
+    outputs.file(hostLibrary)
+}
+
+def nativeStaging = layout.buildDirectory.dir('native-staging')
+def stageHostNative = tasks.register('stageHostNative', Copy) {
+    dependsOn cargoBuild
+    from(hostLibrary)
+    into(nativeStaging.map { it.dir("natives/${hostKey}") })
+}
+
+// CI passes -PnativesDir=<dir containing natives/<key>/<lib> for every platform>.
+def nativesDir = providers.gradleProperty('nativesDir')
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+    if (nativesDir.present) {
+        from(nativesDir.get())
+    } else {
+        dependsOn stageHostNative
+        from(nativeStaging)
+    }
+}
+
+test {
+    useJUnitPlatform()
+    dependsOn cargoBuild
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'worldengine.native.path', hostLibrary.absolutePath
+    inputs.file(hostLibrary).withPropertyName('nativeLibrary').withPathSensitivity(PathSensitivity.NONE)
+    systemProperty 'worldengine.test.cacheDir', layout.buildDirectory.dir('test-native-cache').get().asFile.absolutePath
+}
+
+// GameTests run in a headless server: ./gradlew runGameTest, also part of check. They are their own
+// source set and mod, so test code never ships in the release jar.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'worldengine-gametest'
+        enableClientGameTests = true
+    }
+}
+
+loom {
+    runs {
+        configureEach {
+            // Use the freshly built library in dev instead of the extracted copy.
+            vmArg "-Dworldengine.native.path=${hostLibrary.absolutePath}"
+            vmArg '--enable-native-access=ALL-UNNAMED'
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name in ['runClient', 'runServer', 'runGameTest', 'runClientGameTest']) {
+        dependsOn cargoBuild
+    }
+}

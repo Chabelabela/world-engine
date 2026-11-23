@@ -43,3 +43,44 @@ jobs:
           javap -p -cp "$MC" net.minecraft.client.Camera | grep -i -E 'pos|Vec3' | head -20
           javap -p -cp "$MC" net.minecraft.world.level.Level | grep -i -E 'dimension' | head -20
           javap -p -cp "$MC" net.minecraft.core.registries.Registries | grep -i -E 'timeline|clock' | head -20
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply the draft overlays
+        run: |
+          cp -r tools/api-probe/overlay/. .
+          cp -rv tools/api-probe/overlay-client/. . | sed 's#^.*overlay-client/##'
+      - name: Virtual display and software rendering
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri mesa-utils mesa-vulkan-drivers
+      - name: Client GameTest API
+        working-directory: mod
+        run: |
+          ./gradlew --quiet compileJava
+          JAR=$(find ~/.gradle -name 'fabric-client-gametest-api-v1-*.jar' ! -name '*sources*' | head -1)
+          echo "$JAR"
+          for c in $(unzip -Z1 "$JAR" | grep '^net/fabricmc/fabric/api/client/gametest/v1/.*\.class$' | grep -v '\$' | sed 's/\.class$//;s#/#.#g'); do
+            echo "::group::$c"; javap -cp "$JAR" "$c"; echo "::endgroup::"
+          done
+      - name: Run the client GameTest
+        working-directory: mod
+        timeout-minutes: 20
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClientGameTest --stacktrace
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sky-screenshots
+          path: |
+            mod/build/run/clientGameTest/screenshots/
+            mod/run/screenshots/
+            mod/**/screenshots/*.png
+          if-no-files-found: warn
+      - name: Client log on failure
+        if: failure()
+        run: find mod -name 'latest.log' -path '*logs*' -exec tail -150 {} \;
