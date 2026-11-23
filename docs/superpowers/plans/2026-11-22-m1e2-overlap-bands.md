@@ -40,6 +40,31 @@ This finishes M1's "terrain never visibly breaks at seams" ([M1 overview](2026-1
   - In a real client: how a band looks from the face, a crossing, building across a seam, and water or redstone near a seam.
   - Decoration being skipped in bands and strips. A real world decorates through `applyBiomeDecoration`, which the GameTests' stand-alone chunks never reach. It's a manual check.
 
+**Post-execution note (2026-11-23):** executed with Haiku implementers and Sonnet reviewers. Every task's files matched the CI-verified reference byte for byte, and CI on the executed plan was green ([run #52](https://github.com/Chabelabela/world-engine/actions/runs/45165505308)). The code reviews then found the problems below, fixed in three follow-up commits (`9d5fb39`, `3ac74bd`, `0f6a766`). So **the repository, not these code blocks, is authoritative**:
+- **Band biomes now match quart for quart.**
+  - Minecraft stores one biome per 4×4×4 quart, sampled at the quart's centre.
+  - A band chunk used to sample each quart at the twin of its centre column. A quarter turn puts that column one block off the centre of the twin's quart, so near a biome border the band could store the neighbouring biome.
+  - A quarter turn maps a chunk's quarts onto whole quarts of its twin. So a band quart now takes the biome at its twin quart's centre (`ChunkTerrain.quartBiome`, `PlanetTerrain.quartBiome`), and stores exactly its twin's biomes.
+  - `bandsCopyTheirTwin` now checks all 16 quarts of each chunk. Its old single check compared two different columns.
+- **A ring of undecorated chunks around everything mirrored.**
+  - A vanilla feature (a tree, an ore vein) may write one chunk beyond its own. A decorated chunk next to a copied strip could leave blocks in the strip that its band copy lacks.
+  - Now a chunk is decorated only if neither it nor any of its 8 neighbours is mirrored (`PlanetTerrain.isUndecorated`). The bare zone on the face side is therefore 144 blocks deep.
+  - A new GameTest, `decorationStaysClearOfBands`, checks the strip, the ring and the decorated chunks beyond.
+- **Pre-loading from inside a band aims at the landing.**
+  - In a band, `SeamBands.preloadTargets` returned the twin of where the player stood, up to 64 blocks short of where they land.
+  - The face-side tickets could expire (5 s) before the in-band ones covered the landing.
+  - It now aims at the point straight out at the band's middle, as it does on the face.
+- **Smaller fixes:**
+  - generating a band chunk fails loudly if the chunk doesn't map onto one 16×16 block of its twin face;
+  - `SeamBands.build` rejects faces smaller than two bands;
+  - the Javadoc of `SeamCrossings.plan` and of the handler now says exactly when something crosses or bounces;
+  - the handler updates remembered positions in place instead of allocating every tick;
+  - new unit tests check that:
+    - the middle is exact (64.0 blocks crosses, 63.999 doesn't, on an east side and a west side);
+    - a landing is on a face and doesn't cross back;
+    - something teleported into no-man's land is left alone;
+  - `NativeBandTest` also checks each band's yaw turn against the fold.
+
 **Environment note:** without JDK 25 (as in Claude cloud sessions), skip the `./gradlew` steps and rely on CI (Task 7). Don't download JDKs. The pure planet tests run on any JDK ≥ 21 with the JUnit console launcher.
 
 ---
@@ -2168,7 +2193,7 @@ git commit -m "M1e-2: /worldengine where reports overlap bands"
 - [ ] **Step 3: Manual checks** (owner, in a new World Engine world; creative is easiest):
   1. **Look across a seam:**
      - Fly to E3's east edge (x = 40,960) and look east. The terrain carries on for 128 blocks, then ends in void until M4.
-     - The strip within 128 blocks of the edge has no trees or ores, on both sides.
+     - The band has no trees or ores, and neither has E3 within 144 blocks of the edge (the copied strip and one chunk more).
   2. **Walk across:** at 64 blocks into the band you are carried to E0 (x ≈ −24,512). The surroundings stay the same, apart from chunks loading in.
   3. **Build across the seam:** place blocks and stairs in the band, then fly to E0's west edge. They are there, and the stairs face the same way relative to the terrain. Do the same over North's west edge, where the copy is turned.
   4. **No-man's land:** at x ≈ −8,250, z ≈ −8,250 (near the corner of E0, E1 and North) there is a 128 × 128 hole. Walking into it puts you back.
@@ -2187,7 +2212,9 @@ git push
 
 ## Known limits (by design, for later)
 
-- **Bare bands:** no trees, ores or structures within 128 blocks of a seam, on either side, so both copies match. Copying decoration across needs both chunks decorated first; that's a later improvement (M2 or M4).
+- **Bare bands:** no trees, ores or structures in a band, or within 144 blocks of a seam on the face side (the copied strip plus a ring of one chunk; see the post-execution note), so both copies match. Copying decoration across needs both chunks decorated first; that's a later improvement (M2 or M4).
+- **Structures near seams are cut off.** A structure whose pieces reach into the undecorated zone is missing those pieces, and `/locate` can point at one. Keeping structure starts out of that zone is later work.
+- **Put deep into a band:** something teleported (a command, a pearl, a respawn) to a band's middle or beyond crosses on the next tick, with its look turned as for a walker. Something put into a no-man's land square stays there, as it has no last position to go back to.
 - **Block entity contents aren't copied.** A chest in a band and its twin are two chests, so items put in one aren't in the other. Signs, banners and containers near seams behave this way.
 - **Chunk pop at the crossing:** the client still has to load the twin's chunks, which sit at other level coordinates. E2 measured about 60–260 ms of holes; the pre-load shortens it. M4's level-of-detail planet will hide it.
 - **Edits in chunks that aren't block-ticking** aren't mirrored, because vanilla doesn't send those to clients either. Edits next to a player always are.

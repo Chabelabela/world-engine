@@ -4,7 +4,7 @@ A Minecraft (Java Edition 26.3, Fabric) mod that turns the game into a physicall
 
 **North Star:** build a spacecraft, launch from a procedurally generated planet, reach orbit, fly to its moon, land, and come home, all in one continuous simulation with no loading screens.
 
-**Status:** M0 (foundations) and M1a, M1c, M1d and M1e-1 of the spatial engine are built and green in CI on Linux, Windows and macOS, including GameTests in a headless server. The M1b frame-handoff spike ran, and its design record, [ADR 0001](docs/adr/0001-frames-and-handoff.md), is accepted. Creating a world with World Type **World Engine** gives a universe level with the home planet and its moon, and you can walk or fly across its seams onto the neighbouring cube faces. Next is M1e-2: overlap bands and edit mirroring at the seams. Manual in-game checks are still open for M0, M1d and M1e-1 (see each plan's last task).
+**Status:** M0 (foundations) and M1a, M1c, M1d, M1e-1 and M1e-2 of the spatial engine are built and green in CI on Linux, Windows and macOS, including GameTests in a headless server. The M1b frame-handoff spike ran, and its design record, [ADR 0001](docs/adr/0001-frames-and-handoff.md), is accepted. Creating a world with World Type **World Engine** gives a universe level with the home planet and its moon, and you can walk or fly across its seams onto the neighbouring cube faces. The terrain carries on across each seam in an overlap band, a turned copy of the neighbouring face, and blocks placed or broken there are mirrored onto that face. Next is M1f: per-planet time of day. Manual in-game checks are still open for M0, M1d, M1e-1 and M1e-2 (see each plan's last task).
 
 | Document | What it is |
 |---|---|
@@ -18,6 +18,7 @@ A Minecraft (Java Edition 26.3, Fabric) mod that turns the game into a physicall
 | [docs/superpowers/plans/2026-11-20-m1d-universe-level.md](docs/superpowers/plans/2026-11-20-m1d-universe-level.md) | Step-by-step plan for M1d: the World Engine world type, universe chunk generator, planet layout and GameTests, done |
 | [docs/adr/0001-frames-and-handoff.md](docs/adr/0001-frames-and-handoff.md) | ADR 0001 (accepted): frames and the surface ↔ ship handoff, from the M1b spike |
 | [docs/superpowers/plans/2026-11-22-m1e1-seam-crossing.md](docs/superpowers/plans/2026-11-22-m1e1-seam-crossing.md) | Step-by-step plan for M1e-1: carrying entities across a planet's seams, done |
+| [docs/superpowers/plans/2026-11-22-m1e2-overlap-bands.md](docs/superpowers/plans/2026-11-22-m1e2-overlap-bands.md) | Step-by-step plan for M1e-2: overlap bands at the seams and edit mirroring, done |
 
 ## Building
 
