@@ -14,6 +14,7 @@ import io.github.chabelabela.worldengine.planet.PlanetFace;
 import io.github.chabelabela.worldengine.planet.PlanetHit;
 import io.github.chabelabela.worldengine.planet.PlanetSpec;
 import io.github.chabelabela.worldengine.planet.Planets;
+import io.github.chabelabela.worldengine.planet.SeamBand;
 import java.util.Locale;
 import java.util.Set;
 import net.minecraft.commands.CommandSourceStack;
@@ -63,7 +64,16 @@ final class WorldEngineCommands {
         int z = Mth.floor(position.z());
         PlanetHit hit = Planets.at(x, z);
         if (hit == null) {
-            reply(source, String.format(Locale.ROOT, "(%d, %d): empty space", x, z));
+            SeamBand band = WorldEngineMod.core() == null ? null : PlanetTerrain.bands().at(x, z);
+            if (band == null) {
+                reply(source, String.format(Locale.ROOT, "(%d, %d): empty space", x, z));
+            } else {
+                int[] twin = band.twinBlock(x, z);
+                reply(source, String.format(Locale.ROOT,
+                        "(%d, %d): %s, the band beyond %s's %s edge, %.0f blocks deep, copying %s at (%d, %d)",
+                        x, z, band.planet().name(), band.face(), band.side().name().toLowerCase(Locale.ROOT),
+                        Math.floor(band.depth(x + 0.5, z + 0.5)), band.twinFace(), twin[0], twin[1]));
+            }
             return Command.SINGLE_SUCCESS;
         }
         if (!coreLoaded(source)) {
