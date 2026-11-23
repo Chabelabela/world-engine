@@ -87,7 +87,7 @@ fabricApi {
     configureTests {
         createSourceSet = true
         modId = 'worldengine-gametest'
-        enableClientGameTests = false
+        enableClientGameTests = true
     }
 }
 
@@ -102,7 +102,7 @@ loom {
 }
 
 tasks.configureEach {
-    if (name in ['runClient', 'runServer', 'runGameTest']) {
+    if (name in ['runClient', 'runServer', 'runGameTest', 'runClientGameTest']) {
         dependsOn cargoBuild
     }
 }

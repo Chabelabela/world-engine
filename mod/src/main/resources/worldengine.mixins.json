@@ -9,6 +9,9 @@
     "EnvironmentAttributeValueSamplerMixin",
     "ServerLevelMixin"
   ],
+  "client": [
+    "client.SkyRendererMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

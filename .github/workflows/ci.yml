@@ -60,9 +60,18 @@ jobs:
             cp "$dir"/* "natives-all/natives/$key/"
           done
           find natives-all -type f
-      - name: Build and test the mod (bundles all platforms)
+      - name: Virtual display and software rendering, for the client GameTest
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri mesa-vulkan-drivers
+      - name: Build and test the mod, client GameTest included (bundles all platforms)
         working-directory: mod
-        run: ./gradlew build -PnativesDir=../natives-all
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew build runClientGameTest -PnativesDir=../natives-all
+      - name: Client GameTest screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-screenshots
+          path: mod/build/run/clientGameTest/screenshots/
+          if-no-files-found: warn
       - name: Check the jar bundles all 5 natives
         working-directory: mod
         run: |
