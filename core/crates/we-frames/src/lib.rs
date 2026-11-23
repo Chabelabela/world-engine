@@ -18,10 +18,12 @@ mod cube_sphere;
 mod face;
 mod frame;
 mod layout;
+mod sky;
 mod spin;
 
 pub use cube_sphere::{CubeSphere, Folded, SurfacePoint};
 pub use face::{Edge, Face, QuarterTurns};
 pub use frame::PlanetFrame;
 pub use layout::PlanetLayout;
+pub use sky::LocalSky;
 pub use spin::Spin;
