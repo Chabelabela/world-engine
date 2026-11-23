@@ -109,6 +109,8 @@ public class UniverseGameTests {
     /** A band chunk is its twin chunk, turned: every block of every column, from bedrock to sky. */
     @GameTest
     public void bandsCopyTheirTwin(GameTestHelper helper) {
+        // Checks the generator against SeamBand#twinBlock; SeamBandTest and NativeBandTest check that map against the
+        // core's fold.
         Universe u = universe(helper);
         SeamBands bands = PlanetTerrain.bands();
         int n = Planets.HOME.cells();
@@ -143,11 +145,33 @@ public class UniverseGameTests {
                     }
                 }
             }
-            check(helper, noiseBiome(chunk, QuartPos.fromBlock(minX + 2), QuartPos.fromBlock(64),
-                    QuartPos.fromBlock(minZ + 2)).equals(noiseBiome(twinChunk,
-                    QuartPos.fromBlock(band.twinBlock(minX + 2, minZ + 2)[0]), QuartPos.fromBlock(64),
-                    QuartPos.fromBlock(band.twinBlock(minX + 2, minZ + 2)[1]))), "the band has its twin's biome");
+            for (int qz = 0; qz < 4; qz++) {
+                for (int qx = 0; qx < 4; qx++) {
+                    int[] twin = band.twinBlock(minX + 4 * qx + 2, minZ + 4 * qz + 2);
+                    check(helper, noiseBiome(chunk, QuartPos.fromBlock(minX + 4 * qx + 2), QuartPos.fromBlock(64),
+                            QuartPos.fromBlock(minZ + 4 * qz + 2)).equals(noiseBiome(twinChunk,
+                            QuartPos.fromBlock(twin[0]), QuartPos.fromBlock(64), QuartPos.fromBlock(twin[1]))),
+                            "band quart (" + qx + ", " + qz + ") has its twin's biome");
+                }
+            }
         }
+        helper.succeed();
+    }
+
+    /** Vanilla decoration stays out of bands, the strips they copy and a chunk around them. */
+    @GameTest
+    public void decorationStaysClearOfBands(GameTestHelper helper) {
+        int n = Planets.HOME.cells();
+        PlanetLayout home = Planets.HOME.layout();
+        int x0 = home.faceOriginX(PlanetFace.E0);
+        int z = (home.faceOriginZ(PlanetFace.E0) + n / 2) & ~15;
+        int zE3 = (home.faceOriginZ(PlanetFace.E3) + n / 2) & ~15;
+        check(helper, PlanetTerrain.isMirrored(x0 + 112, z), "the strip's last chunk is copied");
+        check(helper, !PlanetTerrain.isMirrored(x0 + 128, z) && PlanetTerrain.isUndecorated(x0 + 128, z),
+                "the chunk beyond the strip is undecorated but not mirrored");
+        check(helper, !PlanetTerrain.isUndecorated(x0 + 144, z), "decorated beyond the ring");
+        check(helper, PlanetTerrain.isMirrored(home.faceOriginX(PlanetFace.E3) + n + 32, zE3),
+                "a band chunk is mirrored");
         helper.succeed();
     }
 

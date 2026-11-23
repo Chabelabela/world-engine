@@ -47,8 +47,8 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
  * The universe level's generator: planet terrain from the native core where a chunk lies on a planet's
  * net (see {@link Planets}), a copy of the neighbouring face in the overlap bands beyond each seam (see
  * {@link io.github.chabelabela.worldengine.planet.SeamBands}), empty space everywhere else. Vanilla then decorates
- * the terrain through the biomes (trees, grass, ores, mobs) and places structures, except in the bands and the face
- * strips they copy, so those match block for block.
+ * the terrain through the biomes (trees, grass, ores, mobs) and places structures, except in the bands, the face
+ * strips they copy and a ring of one chunk around both, so a band and its strip match block for block.
  *
  * <p>Each chunk costs one batched native call for its biomes and one for its blocks, about 0.25 ms each.
  */
@@ -114,7 +114,7 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
                 // Sample each 4x4 quart at its centre column, as UniverseBiomeSource#createResolver does.
                 int dx = Math.clamp((quartX << 2) + 2 - minX, 0, 15);
                 int dz = Math.clamp((quartZ << 2) + 2 - minZ, 0, 15);
-                return biomes.holder(terrain.biome(dx, dz));
+                return biomes.holder(terrain.quartBiome(dx, dz));
             });
         }
         return CompletableFuture.completedFuture(chunk);
@@ -162,11 +162,14 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
         return CompletableFuture.completedFuture(chunk);
     }
 
-    /** Bands, and the face strips they copy, stay undecorated so both sides match block for block (M1e-2). */
+    /**
+     * Bands, the face strips they copy and a ring of one chunk around them stay undecorated, so a band and its strip
+     * match block for block (M1e-2).
+     */
     @Override
     public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structures) {
         ChunkPos pos = chunk.getPos();
-        if (PlanetTerrain.isMirrored(pos.getMinBlockX(), pos.getMinBlockZ())) {
+        if (PlanetTerrain.isUndecorated(pos.getMinBlockX(), pos.getMinBlockZ())) {
             return;
         }
         super.applyBiomeDecoration(level, chunk, structures);

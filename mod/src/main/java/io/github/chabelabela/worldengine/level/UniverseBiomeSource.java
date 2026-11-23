@@ -77,7 +77,10 @@ public final class UniverseBiomeSource extends BiomeSource {
         return (quartX, quartY, quartZ) -> biomeAt(QuartPos.toBlock(quartX) + 2, QuartPos.toBlock(quartZ) + 2);
     }
 
-    /** The biome of block column (x, z), sampled at that one column (in a band, at its twin). */
+    /**
+     * The biome of the 4x4 quart centred on block column (x, z), as the generator stores it (see
+     * {@link PlanetTerrain#quartBiome}).
+     */
     Holder<Biome> biomeAt(int x, int z) {
         if (Planets.at(x, z) == null && PlanetTerrain.bands().at(x, z) == null) {
             return voidBiome;
@@ -86,6 +89,6 @@ public final class UniverseBiomeSource extends BiomeSource {
         if (seed == null) {
             throw new IllegalStateException("World Engine biomes were asked for before the level was created");
         }
-        return holder(PlanetTerrain.at(x, z, seed).biome());
+        return holder(PlanetTerrain.quartBiome(x, z, seed));
     }
 }
