@@ -1,5 +1,6 @@
 package io.github.chabelabela.worldengine.gametest;
 
+import io.github.chabelabela.worldengine.level.LocalSkies;
 import io.github.chabelabela.worldengine.level.UniverseTime;
 import io.github.chabelabela.worldengine.planet.PlanetFace;
 import io.github.chabelabela.worldengine.planet.PlanetLayout;
@@ -63,6 +64,25 @@ public class TimeGameTests {
         float band = sunAngle(day, new Vec3(home.faceOriginX(PlanetFace.E3) + n + 40.5, 100, z));
         float twin = sunAngle(day, new Vec3(home.faceOriginX(PlanetFace.E0) + 40.5, 100, z));
         check(helper, band == twin, "band " + band + ", twin " + twin);
+        helper.succeed();
+    }
+
+    /** The sky is continuous where a face meets its turned band. */
+    @GameTest
+    public void theSkyCarriesOnAcrossATurnedSeam(GameTestHelper helper) {
+        // North's west band copies E0's north strip, turned three quarter turns.
+        PlanetLayout home = Planets.HOME.layout();
+        double x0 = home.faceOriginX(PlanetFace.NORTH);
+        double z = home.faceOriginZ(PlanetFace.NORTH) + 300.5;
+        LocalSkies.Place onFace = LocalSkies.at(x0 + 0.5, z);
+        LocalSkies.Place inBand = LocalSkies.at(x0 - 0.5, z);
+        check(helper, onFace != null && inBand != null, "both sides have a sky");
+        double[] a = onFace.sky().tilt();
+        double[] b = inBand.sky().tilt();
+        for (int i = 0; i < 9; i++) {
+            check(helper, Math.abs(a[i] - b[i]) < 1e-3,
+                    "tilt[" + i + "]: " + a[i] + " on the face, " + b[i] + " in the band");
+        }
         helper.succeed();
     }
 

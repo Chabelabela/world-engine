@@ -11,7 +11,7 @@ import io.github.chabelabela.worldengine.planet.SeamBand;
 
 /**
  * The sky over a position in the universe level (M1f): which planet it is on, and how that point of the planet
- * sees the sky. In an overlap band it is the sky over the band's twin, the spot on the neighbouring face it copies.
+ * sees the sky. In an overlap band it is the sky over the band's twin, turned into the band's grid.
  *
  * <p>Thread-safe. Each thread remembers its last block column, so asking about one place repeatedly costs one
  * native call.
@@ -50,8 +50,9 @@ public final class LocalSkies {
         PlanetHit hit = Planets.at(bx, bz);
         double px = x;
         double pz = z;
+        SeamBand band = null;
         if (hit == null) {
-            SeamBand band = PlanetTerrain.bands().at(bx, bz);
+            band = PlanetTerrain.bands().at(bx, bz);
             if (band == null) {
                 return null;
             }
@@ -67,6 +68,23 @@ public final class LocalSkies {
         PlanetFace face = hit.cell().face();
         LocalSky sky = core.localSky(planet.cells(), face.id(), px - planet.layout().faceOriginX(face),
                 pz - planet.layout().faceOriginZ(face));
+        if (band != null && band.turns() != 0) {
+            sky = new LocalSky(sky.longitude(), sky.latitude(), turned(sky.tilt(), (4 - band.turns()) % 4));
+        }
         return new Place(planet, sky);
+    }
+
+    /**
+     * {@code tilt} with each column turned by {@code turns} quarter turns about the vertical, as
+     * {@link SeamBand#rotate} turns grid directions.
+     */
+    private static double[] turned(double[] tilt, int turns) {
+        double[] t = tilt.clone();
+        for (int c = 0; c < 3; c++) {
+            double[] r = SeamBand.rotate(turns, tilt[3 * c], tilt[3 * c + 2]);
+            t[3 * c] = r[0];
+            t[3 * c + 2] = r[1];
+        }
+        return t;
     }
 }

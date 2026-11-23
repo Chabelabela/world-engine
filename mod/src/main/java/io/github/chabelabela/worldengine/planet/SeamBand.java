@@ -86,7 +86,7 @@ public record SeamBand(PlanetSpec planet, PlanetFace face, Side side, PlanetFace
     }
 
     /** Quarter turns clockwise seen from above: east turns into south. Like {@code we_frames::QuarterTurns::apply}. */
-    static double[] rotate(int turns, double x, double z) {
+    public static double[] rotate(int turns, double x, double z) {
         return switch (turns) {
             case 0 -> new double[] {x, z};
             case 1 -> new double[] {-z, x};
