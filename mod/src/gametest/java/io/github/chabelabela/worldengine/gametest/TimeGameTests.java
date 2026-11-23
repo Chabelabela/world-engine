@@ -99,7 +99,10 @@ public class TimeGameTests {
         int eighth = (int) (NOON * Planets.HOME.dayTicks() / Planets.MOON.dayTicks());
         float moon = sunAngle(dayAt(helper, NOON), centre(Planets.MOON, PlanetFace.E1));
         float home = sunAngle(dayAt(helper, eighth), centre(Planets.HOME, PlanetFace.E1));
-        checkAngle(helper, moon, home, "the moon at world noon is home at tick " + eighth);
+        // Places are worked out at their block column's centre, half a block east of the moon's E1 centre: a tick
+        // of the moon's slow day. So allow a few ticks (0.1 degrees); without the slower day it would be ~80 off.
+        check(helper, Math.abs(Math.IEEEremainder(moon - home, 360)) < 0.1, String.format(Locale.ROOT,
+                "the moon at world noon is home at tick %d: sun angle %.3f, expected %.3f", eighth, moon, home));
         helper.succeed();
     }
 
