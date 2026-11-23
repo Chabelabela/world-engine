@@ -261,7 +261,7 @@ The sizes below are **rough planning ranges for one experienced developer workin
 - [M1d universe level](superpowers/plans/2026-11-20-m1d-universe-level.md): detailed; its code was built and GameTested in CI before the plan was written. Done.
 - [M1e-1 seam crossing](superpowers/plans/2026-11-22-m1e1-seam-crossing.md): detailed, built and GameTested in CI first. Done.
 - [M1e-2 overlap bands and edit mirroring](superpowers/plans/2026-11-22-m1e2-overlap-bands.md): detailed, built and GameTested in CI first. Done (20 GameTests in all).
-- [M1f per-planet time of day](superpowers/plans/2026-11-23-m1f-time-of-day.md): detailed, built and GameTested in CI first, with a client GameTest of the sky. Done (24 GameTests and 1 client GameTest in all).
+- [M1f per-planet time of day](superpowers/plans/2026-11-23-m1f-time-of-day.md): detailed, built and GameTested in CI first, with a client GameTest of the sky. Done (25 GameTests and 1 client GameTest in all).
 - The M1c and M1d plans don't depend on the handoff design, so they are written before the ADR. The M1e and M1f plans are written from the ADR.
 - **Hard gate after M1d:** passed. The M1b spike ran, and [ADR 0001](adr/0001-frames-and-handoff.md) was accepted on 2026-11-22.
 - **Entry tasks from the M0 reviews:** done in M1a (see `docs/superpowers/plans/2026-11-20-m1a-foundations-and-frames.md`). Remaining items have new homes:

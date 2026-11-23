@@ -70,13 +70,17 @@ public class TimeGameTests {
         helper.succeed();
     }
 
-    /** The sky is continuous where a face meets its turned band. */
+    /**
+     * The sky is continuous where a face meets its turned band, at the edge's midpoint. (Elsewhere the grid lines kink
+     * at the seam, by up to 60 degrees near a cube's corner, and a band's sky is its twin's: see the plan's Known
+     * limits.)
+     */
     @GameTest
     public void theSkyCarriesOnAcrossATurnedSeam(GameTestHelper helper) {
         // North's west band copies E0's north strip, turned three quarter turns.
         PlanetLayout home = Planets.HOME.layout();
         double x0 = home.faceOriginX(PlanetFace.NORTH);
-        double z = home.faceOriginZ(PlanetFace.NORTH) + 300.5;
+        double z = home.faceOriginZ(PlanetFace.NORTH) + Planets.HOME.cells() / 2 + 0.5;
         LocalSkies.Place onFace = LocalSkies.at(x0 + 0.5, z);
         LocalSkies.Place inBand = LocalSkies.at(x0 - 0.5, z);
         check(helper, onFace != null && inBand != null, "both sides have a sky");

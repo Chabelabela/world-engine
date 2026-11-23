@@ -1571,6 +1571,7 @@ git push
 - **The moon in the sky is vanilla's**, opposite the sun, not the real moon (M4 draws the real bodies).
 - **Fog's sunrise tint** assumes the sun rises due east in grid terms. On faces turned against the geographic grid it may tint the wrong side.
 - **Clouds** keep drifting along grid x everywhere.
+- **The sky turns a little as you step into a band near a cube corner.** A band's sky is its twin's, so that nothing changes at the crossing in the band's middle. But grid lines kink at seams, by nothing at an edge's midpoint and by up to 60° at a corner. So at a band's edge the sky turns by the kink: about 15° 4,000 blocks from a corner, and 25° 300 blocks from it. Blending the face's sky into the twin's across the band would hide it.
 - **The ship frame isn't handled yet.** ADR 0001 wants the sky of a ship's surface-equivalent position. The shipyard plots are in empty space, so for now a ship's crew sees Minecraft's own sky on the world clock. M2 plugs the ship's position into `LocalSkies`.
 - **Mixins on private parts of 26.3:** `AttributeTrackSamplerMixin` shadows four private fields, and the attribute mixins target a private inner class and private methods. They fail loudly at launch if Minecraft changes them (`defaultRequire: 1`), so re-check them on every Minecraft update.
 - **Every timeline runs on local time**, including the moon-phase and early-game ones, so moon phases differ slightly by longitude.

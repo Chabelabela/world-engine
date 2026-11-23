@@ -67,7 +67,11 @@ public class SkyClientGameTest implements FabricClientGameTest {
         }
     }
 
-    /** The centre of the sun's disc, the pure white pixels in the upper half, as fractions of the screenshot's size. */
+    /**
+     * The centre of the sun's disc, as fractions of the screenshot's size: the whitest pixels in the upper half
+     * (within 8 of the whitest, by their smallest colour channel). The sun near the zenith is drawn a little grey, so
+     * there is no fixed threshold; a frame whose whitest pixel is below 200 has no sun in it.
+     */
     private static float[] sunIn(Path screenshot) {
         BufferedImage image;
         try {
@@ -75,23 +79,34 @@ public class SkyClientGameTest implements FabricClientGameTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+        int height = image.getHeight() / 2;
+        int whitest = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                whitest = Math.max(whitest, whiteness(image.getRGB(x, y)));
+            }
+        }
+        if (whitest < 200) {
+            throw new AssertionError("no sun in " + screenshot.getFileName() + " (whitest pixel " + whitest + ")");
+        }
         long sumX = 0;
         long sumY = 0;
         long count = 0;
-        for (int y = 0; y < image.getHeight() / 2; y++) {
+        for (int y = 0; y < height; y++) {
             for (int x = 0; x < image.getWidth(); x++) {
-                int rgb = image.getRGB(x, y);
-                if ((rgb >> 16 & 0xFF) >= 250 && (rgb >> 8 & 0xFF) >= 250 && (rgb & 0xFF) >= 250) {
+                if (whiteness(image.getRGB(x, y)) >= whitest - 8) {
                     sumX += x;
                     sumY += y;
                     count++;
                 }
             }
         }
-        if (count == 0) {
-            throw new AssertionError("no sun in " + screenshot.getFileName());
-        }
         return new float[] {(float) sumX / count / image.getWidth(), (float) sumY / count / image.getHeight()};
+    }
+
+    /** The smallest of a pixel's red, green and blue: how white it is. */
+    private static int whiteness(int rgb) {
+        return Math.min(rgb >> 16 & 0xFF, Math.min(rgb >> 8 & 0xFF, rgb & 0xFF));
     }
 
     /** The sun is drawn in the middle of the screenshot, between {@code minY} and {@code maxY} down from the top. */
