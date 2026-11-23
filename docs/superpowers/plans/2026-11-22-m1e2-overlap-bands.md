@@ -2193,12 +2193,13 @@ git commit -m "M1e-2: /worldengine where reports overlap bands"
 - [ ] **Step 3: Manual checks** (owner, in a new World Engine world; creative is easiest):
   1. **Look across a seam:**
      - Fly to E3's east edge (x = 40,960) and look east. The terrain carries on for 128 blocks, then ends in void until M4.
-     - The band has no trees or ores, and neither has E3 within 144 blocks of the edge (the copied strip and one chunk more).
+     - The band has no trees or ores, and neither has E3 within 144 blocks of the edge (the copied strip and one chunk more). Near face corners and the no-man's land squares, strips whose only copy would lie in no-man's land are decorated, so the bare zone is irregular there.
   2. **Walk across:** at 64 blocks into the band you are carried to E0 (x ≈ −24,512). The surroundings stay the same, apart from chunks loading in.
   3. **Build across the seam:** place blocks and stairs in the band, then fly to E0's west edge. They are there, and the stairs face the same way relative to the terrain. Do the same over North's west edge, where the copy is turned.
   4. **No-man's land:** at x ≈ −8,250, z ≈ −8,250 (near the corner of E0, E1 and North) there is a 128 × 128 hole. Walking into it puts you back.
-  5. **Water and redstone near a seam:** pour water in a band, and put a lever and a lamp in a band. Note what the copy does.
+  5. **Water, redstone and moving blocks near a seam:** pour water in a band, put a lever and a lamp in a band, push a block with a piston and drop sand there. Note what the copy does.
   6. **`/worldengine where`** in a band names the band and the face column it copies.
+  7. **Containers and loading:** fill a chest in a band, then break the chest on its twin, and note whether the band chest's items spill. In a fresh band, build at depth 5 and watch for a server hitch while the twin chunk generates. Drop an item at the band's middle with no player near the twin, and note where it ends up.
 
 - [ ] **Step 4: Commit and push.**
 
@@ -2215,7 +2216,12 @@ git push
 - **Bare bands:** no trees, ores or structures in a band, or within 144 blocks of a seam on the face side (the copied strip plus a ring of one chunk; see the post-execution note), so both copies match. Copying decoration across needs both chunks decorated first; that's a later improvement (M2 or M4).
 - **Structures near seams are cut off.** A structure whose pieces reach into the undecorated zone is missing those pieces, and `/locate` can point at one. Keeping structure starts out of that zone is later work.
 - **Put deep into a band:** something teleported (a command, a pearl, a respawn) to a band's middle or beyond crosses on the next tick, with its look turned as for a walker. Something put into a no-man's land square stays there, as it has no last position to go back to.
-- **Block entity contents aren't copied.** A chest in a band and its twin are two chests, so items put in one aren't in the other. Signs, banners and containers near seams behave this way.
+- **Block entity contents aren't copied.** A chest in a band and its twin are two chests, so items put in one aren't in the other. Signs, banners and containers near seams behave this way. Breaking one of them also replaces its twin with air, and the twin's own contents may spill there (a manual check, Task 7).
+- **Entities aren't mirrored.** Item frames, armor stands, boats and animals exist on one side only, and animals generated in both copies are separate animals.
+- **An edit near a seam can generate its twin's chunk on the server thread.** The copy needs the twin chunk loaded, so an edit whose twin chunk isn't loaded yet loads or generates it right away, which can make the server hitch. The pre-load only covers the landing point of a player walking out, not the twin of every column a player builds on.
+- **Only players pre-load.** A mob or item that crosses a seam can land in a twin chunk that isn't loaded, and freeze there until a player comes near.
+- **Worlds made before M1e-2 keep their old seams.** Chunks generated earlier keep void where the bands now are, and trees in the strips the bands copy. The world stamp only tracks the core's terrain version, so it can't warn about this; use a new world.
+- **Grass tint can differ slightly across a seam near biome borders.** The stored biomes match quart for quart, but Minecraft picks each block's biome with a position-dependent jitter between neighbouring quarts and blends colours over neighbouring columns. Band and twin sit at different positions, and a band's outer edge blends with the void.
 - **Chunk pop at the crossing:** the client still has to load the twin's chunks, which sit at other level coordinates. E2 measured about 60–260 ms of holes; the pre-load shortens it. M4's level-of-detail planet will hide it.
 - **Edits in chunks that aren't block-ticking** aren't mirrored, because vanilla doesn't send those to clients either. Edits next to a player always are.
 - **Simultaneous fluid or redstone activity on both sides** is mirrored change by change. Both sides follow the same rules, so they should agree, but this is a manual check (Task 7).

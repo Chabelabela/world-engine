@@ -21,10 +21,10 @@ import net.minecraft.world.level.block.state.BlockState;
  * way across the seam.
  *
  * <p>Called for every block change vanilla sends to clients ({@code ServerLevel.sendBlockUpdated}, through
- * {@code ServerLevelMixin}). The copy is set without neighbour or shape updates and without drops, so it can't start
- * chains of updates of its own or duplicate items; whatever the change causes on its own side (a fence connecting, a
- * torch dropping) is copied as it happens. Block entity contents (chest items, sign text) are not copied. Server
- * thread only.
+ * {@code ServerLevelMixin}). The copy is set without neighbour or shape updates and drops nothing of its own, so it
+ * can't start chains of updates or duplicate items; whatever the change causes on its own side (a fence connecting, a
+ * torch dropping) is copied as it happens. Block entity contents (chest items, sign text) are not copied. Setting a
+ * copy loads, or generates, its chunk if needed. Server thread only.
  */
 public final class SeamMirror {
     private static final Set<ServerLevel> ENABLED_FOR_TESTS = Collections.newSetFromMap(new WeakHashMap<>());
