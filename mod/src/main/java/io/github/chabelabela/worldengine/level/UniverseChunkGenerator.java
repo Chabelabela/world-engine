@@ -4,7 +4,6 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.chabelabela.worldengine.nativebridge.PlanetBiome;
 import io.github.chabelabela.worldengine.nativebridge.PlanetKind;
-import io.github.chabelabela.worldengine.nativebridge.TerrainColumns;
 import io.github.chabelabela.worldengine.planet.ColumnMaterials;
 import io.github.chabelabela.worldengine.planet.FaceCell;
 import io.github.chabelabela.worldengine.planet.Ground;
@@ -28,6 +27,7 @@ import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.NoiseColumn;
 import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.block.state.BlockState;
@@ -45,8 +45,10 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
 
 /**
  * The universe level's generator: planet terrain from the native core where a chunk lies on a planet's
- * net (see {@link Planets}), empty space everywhere else. Vanilla then decorates the terrain through the
- * biomes (trees, grass, ores, mobs) and places structures.
+ * net (see {@link Planets}), a copy of the neighbouring face in the overlap bands beyond each seam (see
+ * {@link io.github.chabelabela.worldengine.planet.SeamBands}), empty space everywhere else. Vanilla then decorates
+ * the terrain through the biomes (trees, grass, ores, mobs) and places structures, except in the bands and the face
+ * strips they copy, so those match block for block.
  *
  * <p>Each chunk costs one batched native call for its biomes and one for its blocks, about 0.25 ms each.
  */
@@ -103,17 +105,16 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
         ChunkPos pos = chunk.getPos();
         int minX = pos.getMinBlockX();
         int minZ = pos.getMinBlockZ();
-        PlanetHit hit = Planets.at(minX, minZ);
-        if (hit == null) {
+        PlanetTerrain.ChunkTerrain terrain = PlanetTerrain.chunk(minX, minZ, randomState.seed());
+        if (terrain == null) {
             Holder<Biome> space = biomes.voidBiome();
             chunk.fillBiomesFromNoise((quartX, quartY, quartZ) -> space);
         } else {
-            TerrainColumns columns = PlanetTerrain.sample(hit, randomState.seed(), 16, 16);
             chunk.fillBiomesFromNoise((quartX, quartY, quartZ) -> {
                 // Sample each 4x4 quart at its centre column, as UniverseBiomeSource#createResolver does.
                 int dx = Math.clamp((quartX << 2) + 2 - minX, 0, 15);
                 int dz = Math.clamp((quartZ << 2) + 2 - minZ, 0, 15);
-                return biomes.holder(columns.biome(dx, dz));
+                return biomes.holder(terrain.biome(dx, dz));
             });
         }
         return CompletableFuture.completedFuture(chunk);
@@ -124,20 +125,20 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
             StructureManager structures, BiomeManager biomeManager, WorldGenRegion region,
             Set<Holder<Biome>> biomesInChunk) {
         ChunkPos pos = chunk.getPos();
-        PlanetHit hit = Planets.at(pos.getMinBlockX(), pos.getMinBlockZ());
-        if (hit == null) {
+        PlanetTerrain.ChunkTerrain terrain =
+                PlanetTerrain.chunk(pos.getMinBlockX(), pos.getMinBlockZ(), randomState.seed());
+        if (terrain == null) {
             return CompletableFuture.completedFuture(chunk);
         }
-        TerrainColumns columns = PlanetTerrain.sample(hit, randomState.seed(), 16, 16);
-        PlanetKind kind = hit.planet().kind();
+        PlanetKind kind = terrain.kind();
         Heightmap oceanFloor = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
         Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
         int minY = Math.max(chunk.getMinY(), LevelShape.MIN_Y);
         int maxY = Math.min(chunk.getMaxY(), LevelShape.maxY());
         for (int dz = 0; dz < 16; dz++) {
             for (int dx = 0; dx < 16; dx++) {
-                int height = columns.height(dx, dz);
-                PlanetBiome biome = columns.biome(dx, dz);
+                int height = terrain.height(dx, dz);
+                PlanetBiome biome = terrain.biome(dx, dz);
                 int top = Math.min(ColumnMaterials.topY(height, kind), maxY);
                 for (int y = minY; y <= top; y++) {
                     Ground ground = ColumnMaterials.at(y, height, biome, kind);
@@ -161,16 +162,25 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
         return CompletableFuture.completedFuture(chunk);
     }
 
+    /** Bands, and the face strips they copy, stay undecorated so both sides match block for block (M1e-2). */
+    @Override
+    public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structures) {
+        ChunkPos pos = chunk.getPos();
+        if (PlanetTerrain.isMirrored(pos.getMinBlockX(), pos.getMinBlockZ())) {
+            return;
+        }
+        super.applyBiomeDecoration(level, chunk, structures);
+    }
+
     @Override
     public int getBaseHeight(int x, int z, Heightmap.Types type, LevelHeightAccessor level, RandomState randomState) {
-        PlanetHit hit = Planets.at(x, z);
-        if (hit == null) {
+        PlanetTerrain.ColumnTerrain column = PlanetTerrain.at(x, z, randomState.seed());
+        if (column == null) {
             return level.getMinY();
         }
-        TerrainColumns column = PlanetTerrain.column(hit, randomState.seed());
-        int height = column.height(0, 0);
-        PlanetBiome biome = column.biome(0, 0);
-        PlanetKind kind = hit.planet().kind();
+        int height = column.height();
+        PlanetBiome biome = column.biome();
+        PlanetKind kind = column.kind();
         for (int y = Math.min(ColumnMaterials.topY(height, kind), level.getMaxY()); y >= level.getMinY(); y--) {
             if (type.isOpaque().test(GroundStates.of(ColumnMaterials.at(y, height, biome, kind)))) {
                 return y + 1;
@@ -182,14 +192,13 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
     @Override
     public NoiseColumn getBaseColumn(int x, int z, LevelHeightAccessor level, RandomState randomState) {
         BlockState[] states = new BlockState[level.getHeight()];
-        PlanetHit hit = Planets.at(x, z);
-        if (hit == null) {
+        PlanetTerrain.ColumnTerrain column = PlanetTerrain.at(x, z, randomState.seed());
+        if (column == null) {
             Arrays.fill(states, GroundStates.of(Ground.AIR));
         } else {
-            TerrainColumns column = PlanetTerrain.column(hit, randomState.seed());
             for (int i = 0; i < states.length; i++) {
-                states[i] = GroundStates.of(ColumnMaterials.at(
-                        level.getMinY() + i, column.height(0, 0), column.biome(0, 0), hit.planet().kind()));
+                states[i] = GroundStates.of(
+                        ColumnMaterials.at(level.getMinY() + i, column.height(), column.biome(), column.kind()));
             }
         }
         return new NoiseColumn(level.getMinY(), states);

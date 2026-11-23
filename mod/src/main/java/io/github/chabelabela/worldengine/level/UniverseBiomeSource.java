@@ -4,7 +4,6 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.chabelabela.worldengine.nativebridge.PlanetBiome;
 import io.github.chabelabela.worldengine.planet.BiomeTable;
-import io.github.chabelabela.worldengine.planet.PlanetHit;
 import io.github.chabelabela.worldengine.planet.Planets;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +22,7 @@ import net.minecraft.world.level.biome.Climate;
 
 /**
  * Biomes of the universe level: each planet column's {@link PlanetBiome} through {@link BiomeTable}, and
- * {@code worldengine:void} off the planets.
+ * {@code worldengine:void} off the planets. A column in an overlap band has its twin's biome.
  *
  * <p>Biomes depend on the world seed, which vanilla only passes to biome sources inside a climate sampler.
  * {@link UniverseChunkGenerator#createState} binds it here before the level asks for any biome. Chunk
@@ -78,16 +77,15 @@ public final class UniverseBiomeSource extends BiomeSource {
         return (quartX, quartY, quartZ) -> biomeAt(QuartPos.toBlock(quartX) + 2, QuartPos.toBlock(quartZ) + 2);
     }
 
-    /** The biome of block column (x, z), sampled at that one column. */
+    /** The biome of block column (x, z), sampled at that one column (in a band, at its twin). */
     Holder<Biome> biomeAt(int x, int z) {
-        PlanetHit hit = Planets.at(x, z);
-        if (hit == null) {
+        if (Planets.at(x, z) == null && PlanetTerrain.bands().at(x, z) == null) {
             return voidBiome;
         }
         Long seed = worldSeed;
         if (seed == null) {
             throw new IllegalStateException("World Engine biomes were asked for before the level was created");
         }
-        return holder(PlanetTerrain.column(hit, seed).biome(0, 0));
+        return holder(PlanetTerrain.at(x, z, seed).biome());
     }
 }

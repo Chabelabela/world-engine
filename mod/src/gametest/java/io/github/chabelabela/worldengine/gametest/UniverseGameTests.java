@@ -8,8 +8,12 @@ import io.github.chabelabela.worldengine.nativebridge.TerrainColumns;
 import io.github.chabelabela.worldengine.planet.BiomeTable;
 import io.github.chabelabela.worldengine.planet.ColumnMaterials;
 import io.github.chabelabela.worldengine.planet.LevelShape;
+import io.github.chabelabela.worldengine.planet.PlanetFace;
 import io.github.chabelabela.worldengine.planet.PlanetHit;
+import io.github.chabelabela.worldengine.planet.PlanetLayout;
 import io.github.chabelabela.worldengine.planet.Planets;
+import io.github.chabelabela.worldengine.planet.SeamBand;
+import io.github.chabelabela.worldengine.planet.SeamBands;
 import io.github.chabelabela.worldengine.planet.TerrainStamp;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,6 +37,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.ProtoChunk;
@@ -97,6 +102,51 @@ public class UniverseGameTests {
             check(helper, top == ColumnMaterials.topY(height, hit.planet().kind()), "surface heightmap at " + where);
             int base = u.generator().getBaseHeight(c[0], c[1], Heightmap.Types.WORLD_SURFACE_WG, chunk, u.randomState());
             check(helper, base == top + 1, "getBaseHeight agrees with the chunk at " + where);
+        }
+        helper.succeed();
+    }
+
+    /** A band chunk is its twin chunk, turned: every block of every column, from bedrock to sky. */
+    @GameTest
+    public void bandsCopyTheirTwin(GameTestHelper helper) {
+        Universe u = universe(helper);
+        SeamBands bands = PlanetTerrain.bands();
+        int n = Planets.HOME.cells();
+        PlanetLayout home = Planets.HOME.layout();
+        PlanetLayout moon = Planets.MOON.layout();
+        int[][] bandColumns = {
+            {home.faceOriginX(PlanetFace.E3) + n + 40, home.faceOriginZ(PlanetFace.E3) + 5_000}, // the equator wrap
+            {home.faceOriginX(PlanetFace.NORTH) - 70, home.faceOriginZ(PlanetFace.NORTH) + 9_000}, // three quarter turns
+            {moon.faceOriginX(PlanetFace.E2) + 1_000, moon.faceOriginZ(PlanetFace.E2) - 20}, // the moon
+        };
+        for (int[] c : bandColumns) {
+            SeamBand band = bands.at(c[0], c[1]);
+            check(helper, band != null, "(" + c[0] + ", " + c[1] + ") is in a band");
+            ProtoChunk chunk = u.generate(new ChunkPos(c[0] >> 4, c[1] >> 4));
+            int[] corner = band.twinBlock(c[0], c[1]);
+            ProtoChunk twinChunk = u.generate(new ChunkPos(corner[0] >> 4, corner[1] >> 4));
+            int minX = chunk.getPos().getMinBlockX();
+            int minZ = chunk.getPos().getMinBlockZ();
+            for (int dz = 0; dz < 16; dz++) {
+                for (int dx = 0; dx < 16; dx++) {
+                    int[] twin = band.twinBlock(minX + dx, minZ + dz);
+                    check(helper, twin[0] >> 4 == twinChunk.getPos().x() && twin[1] >> 4 == twinChunk.getPos().z(),
+                            "a band chunk's twin is one chunk");
+                    for (int y = LevelShape.MIN_Y; y <= LevelShape.maxY(); y++) {
+                        BlockState here = chunk.getBlockState(new BlockPos(minX + dx, y, minZ + dz));
+                        BlockState there = twinChunk.getBlockState(new BlockPos(twin[0], y, twin[1]));
+                        if (here != there) {
+                            helper.fail(band.planet().name() + " " + band.face() + " " + band.side() + " band block ("
+                                    + (minX + dx) + ", " + y + ", " + (minZ + dz) + ") is " + here + ", its twin "
+                                    + there);
+                        }
+                    }
+                }
+            }
+            check(helper, noiseBiome(chunk, QuartPos.fromBlock(minX + 2), QuartPos.fromBlock(64),
+                    QuartPos.fromBlock(minZ + 2)).equals(noiseBiome(twinChunk,
+                    QuartPos.fromBlock(band.twinBlock(minX + 2, minZ + 2)[0]), QuartPos.fromBlock(64),
+                    QuartPos.fromBlock(band.twinBlock(minX + 2, minZ + 2)[1]))), "the band has its twin's biome");
         }
         helper.succeed();
     }
