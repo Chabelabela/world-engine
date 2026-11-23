@@ -34,10 +34,12 @@ import net.minecraft.world.phys.Vec3;
  *       short of its middle is just walking; at the middle it is teleported to its twin on the neighbouring face,
  *       with its grid velocity and yaw turned. A player lands one tick of travel short, as its client advances once
  *       more after a teleport, unless that point is off the net.
- *   <li>Positions on a face within {@link #EDGE_MARGIN} blocks of an edge, and in a band, are remembered. Something
- *       found where nothing is, in the no-man's land near a cube corner, goes back to where it last was, with no
- *       horizontal speed. Something that moved further than {@link SeamCrossings#MAX_STEP} was teleported away, and
- *       is left alone.
+ *   <li>Positions on a face within {@link #EDGE_MARGIN} blocks of an edge, and in a band short of its middle, are
+ *       remembered. Something found where nothing is, in the no-man's land near a cube corner, goes back to where it
+ *       last was, with no horizontal speed. Something that moved further than {@link SeamCrossings#MAX_STEP} was
+ *       teleported away, and is left alone.
+ *   <li>Something put (by a command, a respawn or a pearl) at or past a band's middle crosses on the next tick, turned
+ *       like a walker; something put in the no-man's land stays there, as there is nowhere it last stood.
  *   <li>After a crossing, an entity isn't checked for {@link #COOLDOWN_TICKS} ticks.
  *   <li>Players near a seam get the far side pre-loaded, so the destination is generated before they arrive.
  * </ul>
@@ -47,7 +49,10 @@ import net.minecraft.world.phys.Vec3;
 public final class SeamCrossingHandler {
     /** Ticks after a crossing during which an entity isn't checked again. */
     public static final int COOLDOWN_TICKS = 3;
-    /** Entities this close to a face edge have their position remembered: more than a tick's travel (10 blocks). */
+    /**
+     * Positions this close to a face edge are remembered, for the bounce back from the no-man's land: more than a
+     * tick's travel (10 blocks).
+     */
     public static final int EDGE_MARGIN = 16;
     /** Chunk radius of the pre-loaded area around the far side. */
     public static final int PRELOAD_RADIUS = 2;
@@ -138,7 +143,7 @@ public final class SeamCrossingHandler {
         PlanetHit hit = Planets.at(bx, bz);
         if (hit != null) {
             if (SeamCrossings.nearEdge(hit, EDGE_MARGIN)) {
-                LAST_POSITION.put(id, new double[] {x, z});
+                remember(id, x, z);
             } else {
                 LAST_POSITION.remove(id);
             }
@@ -146,7 +151,7 @@ public final class SeamCrossingHandler {
         }
         SeamBand band = bands.at(bx, bz);
         if (band != null && band.depth(x, z) < SeamBands.TELEPORT_DEPTH) {
-            LAST_POSITION.put(id, new double[] {x, z}); // walking in the band
+            remember(id, x, z); // walking in the band
             return null;
         }
         double[] last = LAST_POSITION.get(id);
@@ -160,7 +165,7 @@ public final class SeamCrossingHandler {
         SeamCrossings.Outcome outcome =
                 SeamCrossings.plan(last[0], last[1], x, z, velocity.x, velocity.z, entity.getYRot(), bands);
         if (outcome instanceof SeamCrossings.Cross cross) {
-            LAST_POSITION.put(id, new double[] {cross.twinX(), cross.twinZ()});
+            remember(id, cross.twinX(), cross.twinZ());
             COOLDOWN_UNTIL.put(id, now + COOLDOWN_TICKS);
             // Only a player's client advances once more after the teleport. If that landing isn't on the net, use the
             // twin itself: never leave it where nothing is.
@@ -187,6 +192,16 @@ public final class SeamCrossingHandler {
         }
         LAST_POSITION.remove(id); // where nothing is, and not having walked there: teleported away
         return null;
+    }
+
+    private static void remember(UUID id, double x, double z) {
+        double[] p = LAST_POSITION.get(id);
+        if (p == null) {
+            LAST_POSITION.put(id, new double[] {x, z});
+        } else {
+            p[0] = x;
+            p[1] = z;
+        }
     }
 
     /** Drops remembered state for entities that no longer exist anywhere. */

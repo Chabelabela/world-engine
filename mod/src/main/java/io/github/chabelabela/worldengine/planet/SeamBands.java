@@ -31,8 +31,14 @@ public final class SeamBands {
 
     /** All bands of all planets, built from the fold: one per seam edge per side. */
     public static SeamBands build(SeamCrossings.Folder folder) {
+        if (WIDTH % 16 != 0) {
+            throw new IllegalStateException("overlap bands must be whole chunks, not " + WIDTH + " blocks wide");
+        }
         List<SeamBand> bands = new ArrayList<>();
         for (PlanetSpec planet : Planets.ALL) {
+            if (planet.cells() < 2 * WIDTH) {
+                throw new IllegalStateException(planet.name() + "'s faces are too small for overlap bands");
+            }
             for (PlanetFace face : PlanetFace.values()) {
                 for (SeamBand.Side side : SeamBand.Side.values()) {
                     SeamBand band = band(planet, face, side, folder);
@@ -112,8 +118,9 @@ public final class SeamBands {
     }
 
     /**
-     * Where pre-loading helps something at level point (x, z): the twin of the point where it would cross, for each
-     * band it is in or within {@link #WIDTH} blocks of. Empty elsewhere. Returns {x, z} points.
+     * Where pre-loading helps something at level point (x, z): where it would land walking straight out across the
+     * seam, for the band it is in, or for each band on its face within {@link #WIDTH} blocks of it. Empty elsewhere.
+     * Returns {x, z} points on the twin faces.
      */
     public List<double[]> preloadTargets(double x, double z) {
         List<double[]> targets = new ArrayList<>();
@@ -121,7 +128,8 @@ public final class SeamBands {
         int bz = (int) Math.floor(z);
         SeamBand in = at(bx, bz);
         if (in != null) {
-            targets.add(in.toTwin(x, z));
+            double[] p = straightOut(in, x, z);
+            targets.add(in.toTwin(p[0], p[1]));
             return targets;
         }
         PlanetHit hit = Planets.at(bx, bz);
@@ -136,22 +144,32 @@ public final class SeamBands {
             if (depth < -WIDTH) {
                 continue;
             }
-            double step = TELEPORT_DEPTH - depth;
-            double px = x + step * switch (band.side()) {
-                case WEST -> -1;
-                case EAST -> 1;
-                default -> 0;
-            };
-            double pz = z + step * switch (band.side()) {
-                case NORTH -> -1;
-                case SOUTH -> 1;
-                default -> 0;
-            };
+            double[] p = straightOut(band, x, z);
+            double px = p[0];
+            double pz = p[1];
             if (at((int) Math.floor(px), (int) Math.floor(pz)) == band) {
                 targets.add(band.toTwin(px, pz));
             }
         }
         return targets;
+    }
+
+    /**
+     * Level point (x, z) moved straight out across {@code band}'s seam to {@link #TELEPORT_DEPTH}, or kept if deeper.
+     */
+    private static double[] straightOut(SeamBand band, double x, double z) {
+        double step = Math.max(0, TELEPORT_DEPTH - band.depth(x, z));
+        double px = x + step * switch (band.side()) {
+            case WEST -> -1;
+            case EAST -> 1;
+            default -> 0;
+        };
+        double pz = z + step * switch (band.side()) {
+            case NORTH -> -1;
+            case SOUTH -> 1;
+            default -> 0;
+        };
+        return new double[] {px, pz};
     }
 
     /**

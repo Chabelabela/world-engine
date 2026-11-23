@@ -3,6 +3,7 @@ package io.github.chabelabela.worldengine.planet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,6 +74,41 @@ class SeamCrossingsTest {
         assertEquals(-180.0F, cross.yaw());
         assertEquals(twin[0] + 0.1, cross.x(), 1e-12);
         assertEquals(twin[1] + 0.4, cross.z(), 1e-12);
+    }
+
+    @Test
+    void theMiddleIsExact() {
+        double z = Z0 + 100.5;
+        assertInstanceOf(SeamCrossings.Cross.class,
+                SeamCrossings.plan(E3_EAST + 60.5, z, E3_EAST + 64.0, z, 0.3, 0, -90, BANDS));
+        assertNull(SeamCrossings.plan(E3_EAST + 60.5, z, E3_EAST + 63.999, z, 0.3, 0, -90, BANDS));
+        // A west-side band, whose depth grows towards -x.
+        double tz = Z0 + 500.5;
+        assertInstanceOf(SeamCrossings.Cross.class,
+                SeamCrossings.plan(E0_WEST - 60.5, tz, E0_WEST - 64.0, tz, -0.3, 0, 90, BANDS));
+        assertNull(SeamCrossings.plan(E0_WEST - 60.5, tz, E0_WEST - 63.999, tz, -0.3, 0, 90, BANDS));
+    }
+
+    @Test
+    void aCrossingLandsOnTheFace() {
+        double z = Z0 + 100.5;
+        SeamCrossings.Cross cross = assertInstanceOf(SeamCrossings.Cross.class,
+                SeamCrossings.plan(E3_EAST + 63.75, z, E3_EAST + 64.25, z, 0.3, 0, -90, BANDS));
+        assertNotNull(Planets.at((int) Math.floor(cross.x()), (int) Math.floor(cross.z())));
+        assertNotNull(Planets.at((int) Math.floor(cross.twinX()), (int) Math.floor(cross.twinZ())));
+        // One tick further along the turned velocity, it is walking on the face: no ping-pong.
+        assertNull(SeamCrossings.plan(cross.x(), cross.z(), cross.x() + cross.vx(), cross.z() + cross.vz(),
+                cross.vx(), cross.vz(), cross.yaw(), BANDS));
+    }
+
+    @Test
+    void teleportingIntoNoMansLandIsLeftAlone() {
+        // Last in empty space north of TURNED, now in the square where TURNED and OVERLAP meet.
+        int lastX = (int) Math.floor(E0_WEST - 10.5);
+        assertNull(Planets.at(lastX, Z0 - 6));
+        assertNull(BANDS.at(lastX, Z0 - 6));
+        assertNull(BANDS.at(lastX, Z0)); // two bands claim it
+        assertNull(SeamCrossings.plan(E0_WEST - 10.5, Z0 - 5.5, E0_WEST - 10.5, Z0 + 0.5, 0, 1, 0, BANDS));
     }
 
     @Test

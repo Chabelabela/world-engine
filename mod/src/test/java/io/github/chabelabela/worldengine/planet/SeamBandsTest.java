@@ -56,14 +56,16 @@ class SeamBandsTest {
 
     @Test
     void preloadTargetsAreWhereACrossingWouldLand() {
-        // In the band: its own twin.
+        // In the band: the twin of where it would land walking straight out, not of where it stands.
         List<double[]> inBand = BANDS.preloadTargets(E0X - 10.5, E0Z + 500.5);
         assertEquals(1, inBand.size());
-        assertArrayEquals(WEST.toTwin(E0X - 10.5, E0Z + 500.5), inBand.get(0));
+        assertArrayEquals(WEST.toTwin(E0X - SeamBands.TELEPORT_DEPTH, E0Z + 500.5), inBand.get(0));
         // On the face, 20 blocks in: the twin of the band's middle straight ahead.
         List<double[]> onFace = BANDS.preloadTargets(E0X + 20.5, E0Z + 500.5);
         assertEquals(1, onFace.size());
         assertArrayEquals(WEST.toTwin(E0X - SeamBands.TELEPORT_DEPTH, E0Z + 500.5), onFace.get(0));
+        // A point in the band and a face point on the same line straight out get the same target.
+        assertArrayEquals(inBand.get(0), onFace.get(0));
         // Far from the edge: nothing.
         assertTrue(BANDS.preloadTargets(E0X + W + 20.5, E0Z + 500.5).isEmpty());
     }

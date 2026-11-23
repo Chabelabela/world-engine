@@ -48,8 +48,10 @@ public final class SeamCrossings {
     /**
      * The outcome for something now at level position ({@code x}, {@code z}), moving ({@code vx}, {@code vz}) blocks
      * per tick and looking along {@code yaw}, whose last position on a face or in a band was ({@code lastX},
-     * {@code lastZ}). Null if it is on a face, in a band short of its middle, moved more than {@link #MAX_STEP}, or its
-     * last position wasn't on a face or in a band.
+     * {@code lastZ}). Null if it is on a face, in a band short of its middle, or moved more than {@link #MAX_STEP}. In
+     * a band at or past its middle it crosses, wherever it was. Anywhere else (the no-man's land near a cube corner,
+     * or empty space) it bounces back to its last position if that was on a face or in a band, and is otherwise left
+     * alone (null).
      */
     public static Outcome plan(double lastX, double lastZ, double x, double z, double vx, double vz, float yaw,
             SeamBands bands) {
