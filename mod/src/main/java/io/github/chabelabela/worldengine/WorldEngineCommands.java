@@ -92,7 +92,10 @@ final class WorldEngineCommands {
         return Command.SINGLE_SUCCESS;
     }
 
-    /** ", local time 14:30 at 12.3° N 45.6° E" for a position on a planet or in a band; "" elsewhere (M1f). */
+    /**
+     * ", local time 14:30 at 12.3° N 45.6° E" for a position on a planet or in a band; "" elsewhere (M1f). In a band,
+     * the twin's place.
+     */
     private static String localTime(CommandSourceStack source, Vec3 position) {
         LocalSkies.Place place = LocalSkies.at(position.x(), position.z());
         if (place == null) {

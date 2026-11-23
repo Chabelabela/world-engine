@@ -22,7 +22,7 @@ abstract class SkyRendererMixin {
     @Unique
     private Matrix4f worldengine$tilt;
 
-    @Inject(method = "extractRenderState", at = @At("TAIL"))
+    @Inject(method = "extractRenderState", at = @At("HEAD"))
     private void worldengine$tiltForCamera(ClientLevel level, float partialTick, Camera camera, SkyRenderState state,
             CallbackInfo ci) {
         worldengine$tilt = UniverseSky.tiltAt(level, camera.position());

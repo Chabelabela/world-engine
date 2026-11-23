@@ -15,7 +15,11 @@ public final class UniverseSky {
     private UniverseSky() {
     }
 
-    /** The tilt for a camera at {@code position} in {@code level}, or null where the sky is Minecraft's own. */
+    /**
+     * The tilt for a camera at {@code position} in {@code level}, or null where the sky is Minecraft's own: outside
+     * the universe level, and in empty space between the planets (so the sky turns back to Minecraft's when the
+     * camera leaves a planet's net). In an overlap band, the band's own sky.
+     */
     public static Matrix4f tiltAt(Level level, Vec3 position) {
         if (!UniverseTime.isUniverse(level)) {
             return null;

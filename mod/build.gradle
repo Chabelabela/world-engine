@@ -81,8 +81,9 @@ test {
     systemProperty 'worldengine.test.cacheDir', layout.buildDirectory.dir('test-native-cache').get().asFile.absolutePath
 }
 
-// GameTests run in a headless server: ./gradlew runGameTest, also part of check. They are their own
-// source set and mod, so test code never ships in the release jar.
+// GameTests run in a headless server: ./gradlew runGameTest, also part of check. Client GameTests run a real
+// client (./gradlew runClientGameTest opens a window; CI uses a virtual display) and are not part of check.
+// Both are their own source set and mod, so test code never ships in the release jar.
 fabricApi {
     configureTests {
         createSourceSet = true
