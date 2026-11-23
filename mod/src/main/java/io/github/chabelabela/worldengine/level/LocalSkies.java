@@ -13,8 +13,9 @@ import io.github.chabelabela.worldengine.planet.SeamBand;
  * The sky over a position in the universe level (M1f): which planet it is on, and how that point of the planet
  * sees the sky. In an overlap band it is the sky over the band's twin, turned into the band's grid.
  *
- * <p>Thread-safe. Each thread remembers its last block column, so asking about one place repeatedly costs one
- * native call.
+ * <p>A place is worked out at the centre of its block column, so the answer doesn't depend on which point of the
+ * column is asked about first. Thread-safe. Each thread remembers its last block column, so asking about one place
+ * repeatedly costs one native call.
  */
 public final class LocalSkies {
     /** {@code planet}, and how one of its points sees the sky. */
@@ -47,7 +48,7 @@ public final class LocalSkies {
         if (last != null && last.x() == bx && last.z() == bz) {
             return last.place();
         }
-        Place place = lookUp(core, x, z, bx, bz);
+        Place place = lookUp(core, bx + 0.5, bz + 0.5, bx, bz);
         LAST.set(new Last(bx, bz, place));
         return place;
     }

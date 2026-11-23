@@ -50,6 +50,7 @@ class NativeLocalSkyTest {
         assertThrows(NativeCoreException.class, () -> core.localSky(N - 1, 0, 1.0, 1.0));
         assertThrows(NativeCoreException.class, () -> core.localSky(N, 0, Double.NaN, 1.0));
         assertThrows(NativeCoreException.class, () -> core.localSky(N, -1, 1.0, 1.0));
-        assertThrows(NativeCoreException.class, () -> core.localSky(-N, 0, 1.0, 1.0));
+        // -1 cells is 2^32 - 1 to the core: odd, so not a cube sphere. (-N would be a valid, huge one.)
+        assertThrows(NativeCoreException.class, () -> core.localSky(-1, 0, 1.0, 1.0));
     }
 }

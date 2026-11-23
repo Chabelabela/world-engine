@@ -1547,7 +1547,7 @@ git commit -m "M1f: /worldengine where reports the local time"
   1. **Spawn:** at noon (`/time set noon`) the sun is overhead, as in vanilla. `/worldengine where` says local time 12:00 at 0.0° N 0.0° E.
   2. **East and west:** fly to E2 (x ≈ 16,000, z = 0). It is evening there: the sun is low in the west, and `/worldengine where` says about 18:00. On E3 (x ≈ 32,000) it is night, and on E0 (x ≈ −16,000) morning.
   3. **High latitude:** on North near its edge with E1 (x = 0, z ≈ −8,300), the noon sun stands about 45° high, due south. At midnight the stars turn about a point 45° up in the north. Near North's centre (z ≈ −16,400) the sun circles the horizon.
-  4. **Light follows the sun:** at E1's noon, sky light on E3 is night-dark: torches matter there, undead don't burn there at dawn on E1, and so on.
+  4. **Light follows the sun where it is sampled:** at E1's noon (`/time set noon`), the sky over E3 is night-dark, and undead standing in the open on E3 don't burn. Monster spawning and beds still go by the night at spawn's meridian (Known limits).
   5. **The moon:** `/worldengine goto moon`. The sun moves eight times slower there.
   6. **Across a seam:** cross from E3 to E0 at night; the sky doesn't jump.
 
@@ -1571,6 +1571,8 @@ git push
 - **The moon in the sky is vanilla's**, opposite the sun, not the real moon (M4 draws the real bodies).
 - **Fog's sunrise tint** assumes the sun rises due east in grid terms. On faces turned against the geographic grid it may tint the wrong side.
 - **Clouds** keep drifting along grid x everywhere.
+- **The ship frame isn't handled yet.** ADR 0001 wants the sky of a ship's surface-equivalent position. The shipyard plots are in empty space, so for now a ship's crew sees Minecraft's own sky on the world clock. M2 plugs the ship's position into `LocalSkies`.
+- **Mixins on private parts of 26.3:** `AttributeTrackSamplerMixin` shadows four private fields, and the attribute mixins target a private inner class and private methods. They fail loudly at launch if Minecraft changes them (`defaultRequire: 1`), so re-check them on every Minecraft update.
 - **Every timeline runs on local time**, including the moon-phase and early-game ones, so moon phases differ slightly by longitude.
 
 ## Self-review against the M1 goals and ADR 0001
