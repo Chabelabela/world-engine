@@ -10,6 +10,9 @@
       "io.github.chabelabela.worldengine.gametest.SeamGameTests",
       "io.github.chabelabela.worldengine.gametest.SeamMirrorGameTests",
       "io.github.chabelabela.worldengine.gametest.TimeGameTests"
+    ],
+    "fabric-client-gametest": [
+      "io.github.chabelabela.worldengine.gametest.client.SkyClientGameTest"
     ]
   },
   "depends": {
