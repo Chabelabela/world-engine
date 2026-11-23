@@ -62,6 +62,8 @@ class NativeBandTest {
                     assertArrayEquals(new double[] {layout.faceOriginX(twin) + fold.x(), layout.faceOriginZ(twin) + fold.z()},
                             band.toTwin(x, z), 1e-9, label);
                     assertArrayEquals(new double[] {fold.vx(), fold.vz()}, band.rotateDirection(1.0, 0.0), 1e-12, label);
+                    SeamCrossing turned = core.seamCross(n, band.face().id(), grid[0], grid[1], 1.0, 0.0, 37.5F);
+                    assertEquals(turned.yaw(), band.rotateYaw(37.5F), 1e-4F, label);
                     assertEquals(depth, band.depth(x, z), 1e-9, label);
                 }
             }
