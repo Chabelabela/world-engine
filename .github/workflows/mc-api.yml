@@ -64,9 +64,9 @@ jobs:
           ./gradlew --quiet compileJava
           JAR=$(find ~/.gradle -name 'fabric-client-gametest-api-v1-*.jar' ! -name '*sources*' | head -1)
           echo "$JAR"
-          for c in $(unzip -Z1 "$JAR" | grep '^net/fabricmc/fabric/api/client/gametest/v1/.*\.class$' | grep -v '\$' | sed 's/\.class$//;s#/#.#g'); do
-            echo "::group::$c"; javap -cp "$JAR" "$c"; echo "::endgroup::"
-          done
+          MC=$(find .gradle/loom-cache -name 'minecraft-merged-*-26.3.jar' | head -1)
+          javap -cp "$MC" net.minecraft.client.gui.screens.worldselection.WorldCreationUiState | grep -i -E 'preset|worldtype' || true
+          javap -cp "$MC" 'net.minecraft.client.gui.screens.worldselection.WorldCreationUiState$WorldTypeEntry' || true
       - name: Run the client GameTest
         working-directory: mod
         timeout-minutes: 20

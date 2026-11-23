@@ -10,7 +10,7 @@ public class SkyClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext singleplayer = context.worldBuilder()
-                .adjustSettings(creator -> creator.setWorldType(creator.getNormalWorldTypes().stream()
+                .adjustSettings(creator -> creator.setWorldType(creator.getNormalPresetList().stream()
                         .filter(type -> type.preset() != null
                                 && type.preset().is(Identifier.fromNamespaceAndPath("worldengine", "universe")))
                         .findFirst().orElseThrow()))
