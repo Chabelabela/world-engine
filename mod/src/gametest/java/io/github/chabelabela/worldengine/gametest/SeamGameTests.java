@@ -1,11 +1,13 @@
 package io.github.chabelabela.worldengine.gametest;
 
 import io.github.chabelabela.worldengine.WorldEngineMod;
+import io.github.chabelabela.worldengine.level.PlanetTerrain;
 import io.github.chabelabela.worldengine.level.SeamCrossingHandler;
 import io.github.chabelabela.worldengine.nativebridge.SeamCrossing;
 import io.github.chabelabela.worldengine.planet.PlanetFace;
 import io.github.chabelabela.worldengine.planet.PlanetLayout;
 import io.github.chabelabela.worldengine.planet.Planets;
+import io.github.chabelabela.worldengine.planet.SeamBands;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -35,12 +37,25 @@ public class SeamGameTests {
         double z = HOME.faceOriginZ(PlanetFace.E3) + 100.5;
         double east = HOME.faceOriginX(PlanetFace.E3) + N;
         double west = HOME.faceOriginX(PlanetFace.E0);
-        Scene.run(helper, east - 4.5, z, new double[] {east + 0.25, z, west + 0.25, z}, (scene, item) -> {
-            scene.move(item, east + 0.25, z, new Vec3(0.3, 0, 0), -90.0F);
-            // Fold's point is 0.25 inside E0's west edge; an item lands there (only players land one tick short).
-            scene.expect(item, west + 0.25, z, 0.3, 0.0, -90.0F, "across the equator wrap");
-            SeamCrossingHandler.checkNow(helper.getLevel(), item);
-            scene.expect(item, west + 0.25, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
+        double middle = SeamBands.TELEPORT_DEPTH;
+        Scene.run(helper, east + middle - 1.5, z, new double[] {east + middle + 0.25, z, west + middle + 0.25, z},
+                (scene, item) -> {
+                    // E3's east band copies E0's west strip: the equator wrap is a translation four faces west.
+                    scene.move(item, east + middle + 0.25, z, new Vec3(0.3, 0, 0), -90.0F);
+                    // An item lands on its twin (only players land one tick short).
+                    scene.expect(item, west + middle + 0.25, z, 0.3, 0.0, -90.0F, "across the equator wrap");
+                    SeamCrossingHandler.checkNow(helper.getLevel(), item);
+                    scene.expect(item, west + middle + 0.25, z, 0.3, 0.0, -90.0F, "still there during the cooldown");
+                });
+    }
+
+    @GameTest
+    public void walkingIntoABandIsJustWalking(GameTestHelper helper) {
+        double z = HOME.faceOriginZ(PlanetFace.E3) + 100.5;
+        double east = HOME.faceOriginX(PlanetFace.E3) + N;
+        Scene.run(helper, east - 2.5, z, new double[] {east + 10.5, z}, (scene, item) -> {
+            scene.move(item, east + 10.5, z, new Vec3(0.3, 0, 0), -90.0F);
+            scene.expect(item, east + 10.5, z, 0.3, 0.0, -90.0F, "10 blocks into E3's east band, untouched");
         });
     }
 
@@ -48,15 +63,32 @@ public class SeamGameTests {
     public void aRotatedSeamTurnsMomentumAndLook(GameTestHelper helper) {
         int ox = HOME.faceOriginX(PlanetFace.NORTH);
         int oz = HOME.faceOriginZ(PlanetFace.NORTH);
-        SeamCrossing fold = WorldEngineMod.core().seamCross(N, PlanetFace.NORTH.id(), -0.25, 100.5, -0.281, 0, 90);
+        double depth = SeamBands.TELEPORT_DEPTH + 0.25;
+        // The oracle is the core's fold itself, at that depth: the band's map must agree with it.
+        SeamCrossing fold = WorldEngineMod.core().seamCross(N, PlanetFace.NORTH.id(), -depth, 100.5, -0.281, 0, 90);
         double foldX = HOME.faceOriginX(PlanetFace.E0) + fold.x();
         double foldZ = HOME.faceOriginZ(PlanetFace.E0) + fold.z();
-        double[] load = {ox - 0.25, oz + 100.5, foldX, foldZ};
-        Scene.run(helper, ox + 3.5, oz + 100.5, load, (scene, item) -> {
-            scene.move(item, ox - 0.25, oz + 100.5, new Vec3(-0.281, 0, 0), 90.0F);
-            // North's west edge meets E0 three quarter turns round: running west carries on running south. The item
-            // lands at fold's point; only players land one tick short.
-            scene.expect(item, foldX, foldZ, 0.0, 0.281, 0.0F, "across North's west edge");
+        double[] load = {ox - depth, oz + 100.5, foldX, foldZ};
+        Scene.run(helper, ox - depth + 1.0, oz + 100.5, load, (scene, item) -> {
+            scene.move(item, ox - depth, oz + 100.5, new Vec3(-0.281, 0, 0), 90.0F);
+            // North's west edge meets E0 three quarter turns round: running west carries on running south.
+            scene.expect(item, foldX, foldZ, 0.0, 0.281, 0.0F, "across North's west band");
+        });
+    }
+
+    @GameTest
+    public void whereTwoBandsMeetItGoesBack(GameTestHelper helper) {
+        // E0's north band and North's west band meet in a 128 x 128 square by the cube corner of E0, E1 and North.
+        int cornerX = HOME.faceOriginX(PlanetFace.NORTH);
+        int cornerZ = HOME.faceOriginZ(PlanetFace.E0);
+        double z = cornerZ - 8.5;
+        double outside = cornerX - SeamBands.WIDTH - 10.5;
+        double inside = cornerX - SeamBands.WIDTH + 1.5;
+        helper.assertTrue(PlanetTerrain.bands().at((int) Math.floor(inside), (int) Math.floor(z)) == null,
+                "the square is no-man's land");
+        Scene.run(helper, outside, z, new double[] {inside, z}, (scene, item) -> {
+            scene.move(item, inside, z, new Vec3(0.4, 0, 0), -90.0F);
+            scene.expect(item, outside, z, 0.0, 0.0, -90.0F, "back out of no-man's land");
         });
     }
 

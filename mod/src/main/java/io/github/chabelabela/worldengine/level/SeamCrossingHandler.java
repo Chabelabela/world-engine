@@ -1,9 +1,10 @@
 package io.github.chabelabela.worldengine.level;
 
 import io.github.chabelabela.worldengine.WorldEngineMod;
-import io.github.chabelabela.worldengine.nativebridge.NativeCore;
 import io.github.chabelabela.worldengine.planet.PlanetHit;
 import io.github.chabelabela.worldengine.planet.Planets;
+import io.github.chabelabela.worldengine.planet.SeamBand;
+import io.github.chabelabela.worldengine.planet.SeamBands;
 import io.github.chabelabela.worldengine.planet.SeamCrossings;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,29 +26,29 @@ import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Carries everything that steps off a planet's net across a seam to the neighbouring face, at the end of every server
- * tick, in the universe level (see {@link SeamCrossings}; ADR 0001, E2 in the M1b spike).
+ * Carries everything that walks across a seam to the neighbouring face, at the end of every server tick, in the
+ * universe level (see {@link SeamCrossings}; ADR 0001; M1e-2).
  *
  * <ul>
- *   <li>Entities within {@link #EDGE_MARGIN} blocks of a face edge have their position remembered. One that is then
- *       on no face has left across a seam, and is teleported to fold's point (a player one tick of travel short of
- *       it, as its client advances once more after the teleport), with its grid velocity and yaw turned. One that
- *       moved further than {@link SeamCrossings#MAX_STEP} was teleported away, and is left alone.
- *   <li>Beyond a cube corner there is no neighbour: it goes back to where it last stood, with no horizontal speed.
- *   <li>After a crossing, an entity isn't checked for {@link #COOLDOWN_TICKS} ticks, so one that lands less than a
- *       tick of travel inside the new face doesn't fold straight back.
+ *   <li>Beyond each seam lies an overlap band copying the neighbouring face ({@link SeamBands}). Something in a band
+ *       short of its middle is just walking; at the middle it is teleported to its twin on the neighbouring face,
+ *       with its grid velocity and yaw turned. A player lands one tick of travel short, as its client advances once
+ *       more after a teleport, unless that point is off the net.
+ *   <li>Positions on a face within {@link #EDGE_MARGIN} blocks of an edge, and in a band, are remembered. Something
+ *       found where nothing is, in the no-man's land near a cube corner, goes back to where it last was, with no
+ *       horizontal speed. Something that moved further than {@link SeamCrossings#MAX_STEP} was teleported away, and
+ *       is left alone.
+ *   <li>After a crossing, an entity isn't checked for {@link #COOLDOWN_TICKS} ticks.
  *   <li>Players near a seam get the far side pre-loaded, so the destination is generated before they arrive.
  * </ul>
  *
  * <p>Passengers ride along with their vehicle. Server thread only.
  */
 public final class SeamCrossingHandler {
-    /** Ticks after a crossing during which an entity isn't checked again (E2 needed 3). */
+    /** Ticks after a crossing during which an entity isn't checked again. */
     public static final int COOLDOWN_TICKS = 3;
     /** Entities this close to a face edge have their position remembered: more than a tick's travel (10 blocks). */
     public static final int EDGE_MARGIN = 16;
-    /** Players this close to a seam have its far side pre-loaded. */
-    public static final int PRELOAD_MARGIN = 64;
     /** Chunk radius of the pre-loaded area around the far side. */
     public static final int PRELOAD_RADIUS = 2;
     /** Pre-load tickets are refreshed this often, and expire after {@link #PRELOAD_TICKS} without a refresh. */
@@ -55,7 +56,7 @@ public final class SeamCrossingHandler {
     static final long PRELOAD_TICKS = 100;
 
     private static TicketType preloadTicket;
-    private static final Map<UUID, double[]> LAST_ON_NET = new HashMap<>();
+    private static final Map<UUID, double[]> LAST_POSITION = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWN_UNTIL = new HashMap<>();
 
     private SeamCrossingHandler() {
@@ -68,7 +69,7 @@ public final class SeamCrossingHandler {
         ServerTickEvents.END_SERVER_TICK.register(SeamCrossingHandler::onEndTick);
         // Tick counts and positions are per server run; they must not survive a singleplayer stop and start.
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            LAST_ON_NET.clear();
+            LAST_POSITION.clear();
             COOLDOWN_UNTIL.clear();
         });
     }
@@ -85,11 +86,11 @@ public final class SeamCrossingHandler {
 
     /** Checks every entity in {@code level} once. */
     private static void tickLevel(ServerLevel level) {
-        SeamCrossings.Folder folder = folder();
+        SeamBands bands = PlanetTerrain.bands();
         long now = level.getServer().getTickCount();
         List<Runnable> moves = new ArrayList<>();
         for (Entity entity : level.getAllEntities()) {
-            Runnable move = check(level, entity, now, folder);
+            Runnable move = check(level, entity, now, bands);
             if (move != null) {
                 moves.add(move);
             }
@@ -102,22 +103,17 @@ public final class SeamCrossingHandler {
      * entity in a chunk loaded that same tick may not be in the level's entity list yet.
      */
     public static void checkNow(ServerLevel level, Entity entity) {
-        Runnable move = check(level, entity, level.getServer().getTickCount(), folder());
+        Runnable move = check(level, entity, level.getServer().getTickCount(), PlanetTerrain.bands());
         if (move != null) {
             move.run();
         }
     }
 
-    private static SeamCrossings.Folder folder() {
-        NativeCore core = PlanetTerrain.core();
-        return (cells, face, x, z, vx, vz, yaw) -> core.seamCross(cells, face.id(), x, z, vx, vz, yaw);
-    }
-
     /**
-     * Remembers {@code entity} near an edge, pre-loads the far side for a player near a seam, and returns the
-     * teleport to run if it has left the net, or null.
+     * Remembers where {@code entity} is, pre-loads the far side for a player near a seam, and returns the teleport to
+     * run if it has reached a band's middle or no-man's land, or null.
      */
-    private static Runnable check(ServerLevel level, Entity entity, long now, SeamCrossings.Folder folder) {
+    private static Runnable check(ServerLevel level, Entity entity, long now, SeamBands bands) {
         if (entity.isPassenger() || entity.isRemoved() || entity.isSpectator()) {
             return null;
         }
@@ -131,38 +127,47 @@ public final class SeamCrossingHandler {
         }
         double x = entity.getX();
         double z = entity.getZ();
-        PlanetHit hit = Planets.at(Mth.floor(x), Mth.floor(z));
+        int bx = Mth.floor(x);
+        int bz = Mth.floor(z);
+        if (entity instanceof ServerPlayer && now % PRELOAD_REFRESH_TICKS == 0) {
+            for (double[] target : bands.preloadTargets(x, z)) {
+                level.getChunkSource().addTicketWithRadius(preloadTicket,
+                        new ChunkPos(Mth.floor(target[0]) >> 4, Mth.floor(target[1]) >> 4), PRELOAD_RADIUS);
+            }
+        }
+        PlanetHit hit = Planets.at(bx, bz);
         if (hit != null) {
             if (SeamCrossings.nearEdge(hit, EDGE_MARGIN)) {
-                LAST_ON_NET.put(id, new double[] {x, z});
+                LAST_POSITION.put(id, new double[] {x, z});
             } else {
-                LAST_ON_NET.remove(id);
-            }
-            if (entity instanceof ServerPlayer && now % PRELOAD_REFRESH_TICKS == 0
-                    && SeamCrossings.nearEdge(hit, PRELOAD_MARGIN)) {
-                for (double[] side : SeamCrossings.farSides(hit, PRELOAD_MARGIN, folder)) {
-                    level.getChunkSource().addTicketWithRadius(preloadTicket,
-                            new ChunkPos(Mth.floor(side[0]) >> 4, Mth.floor(side[1]) >> 4), PRELOAD_RADIUS);
-                }
+                LAST_POSITION.remove(id);
             }
             return null;
         }
-        double[] last = LAST_ON_NET.get(id);
+        SeamBand band = bands.at(bx, bz);
+        if (band != null && band.depth(x, z) < SeamBands.TELEPORT_DEPTH) {
+            LAST_POSITION.put(id, new double[] {x, z}); // walking in the band
+            return null;
+        }
+        double[] last = LAST_POSITION.get(id);
+        if (last == null && band != null) {
+            last = new double[] {x, z}; // beyond a band's middle without having walked there (spawned, say)
+        }
         if (last == null) {
             return null;
         }
         Vec3 velocity = entity instanceof ServerPlayer player ? player.getKnownMovement() : entity.getDeltaMovement();
         SeamCrossings.Outcome outcome =
-                SeamCrossings.plan(last[0], last[1], x, z, velocity.x, velocity.z, entity.getYRot(), folder);
+                SeamCrossings.plan(last[0], last[1], x, z, velocity.x, velocity.z, entity.getYRot(), bands);
         if (outcome instanceof SeamCrossings.Cross cross) {
-            LAST_ON_NET.put(id, new double[] {cross.foldX(), cross.foldZ()});
+            LAST_POSITION.put(id, new double[] {cross.twinX(), cross.twinZ()});
             COOLDOWN_UNTIL.put(id, now + COOLDOWN_TICKS);
-            // Only a player's client advances once more after the teleport. If that landing isn't on the net (the
-            // player is blocked or stopped, so the client won't advance), use fold's point: never leave it off the net.
-            boolean shortOfFold = entity instanceof ServerPlayer
+            // Only a player's client advances once more after the teleport. If that landing isn't on the net, use the
+            // twin itself: never leave it where nothing is.
+            boolean shortOfTwin = entity instanceof ServerPlayer
                     && Planets.at(Mth.floor(cross.x()), Mth.floor(cross.z())) != null;
-            double landX = shortOfFold ? cross.x() : cross.foldX();
-            double landZ = shortOfFold ? cross.z() : cross.foldZ();
+            double landX = shortOfTwin ? cross.x() : cross.twinX();
+            double landZ = shortOfTwin ? cross.z() : cross.twinZ();
             return () -> {
                 if (!entity.isRemoved()) {
                     entity.teleport(new TeleportTransition(level, new Vec3(landX, entity.getY(), landZ),
@@ -180,13 +185,13 @@ public final class SeamCrossingHandler {
                 }
             };
         }
-        LAST_ON_NET.remove(id); // off the net and not crossing: it was teleported away
+        LAST_POSITION.remove(id); // where nothing is, and not having walked there: teleported away
         return null;
     }
 
     /** Drops remembered state for entities that no longer exist anywhere. */
     private static void forgetMissing(MinecraftServer server) {
-        LAST_ON_NET.keySet().removeIf(id -> !exists(server, id));
+        LAST_POSITION.keySet().removeIf(id -> !exists(server, id));
         COOLDOWN_UNTIL.keySet().removeIf(id -> !exists(server, id));
     }
 
