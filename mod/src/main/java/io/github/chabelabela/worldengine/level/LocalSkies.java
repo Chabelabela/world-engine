@@ -29,8 +29,14 @@ public final class LocalSkies {
     private LocalSkies() {
     }
 
-    /** The place at level position ({@code x}, {@code z}), or null in empty space or without the native core. */
+    /**
+     * The place at level position ({@code x}, {@code z}), or null in empty space, in no-man's land, for a position
+     * that isn't finite, or without the native core.
+     */
     public static Place at(double x, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(z)) {
+            return null;
+        }
         NativeCore core = WorldEngineMod.core();
         if (core == null) {
             return null;

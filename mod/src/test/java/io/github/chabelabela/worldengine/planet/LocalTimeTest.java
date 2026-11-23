@@ -2,6 +2,7 @@ package io.github.chabelabela.worldengine.planet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.chabelabela.worldengine.nativebridge.PlanetKind;
 import org.junit.jupiter.api.Test;
@@ -17,17 +18,38 @@ class LocalTimeTest {
 
     @Test
     void theSunIsAheadToTheEast() {
-        // A quarter turn east sees sunset when the reference meridian sees noon; a quarter turn west, sunrise.
+        // A quarter turn east sees sunset when the reference meridian sees noon; a quarter turn west, sunrise
+        // (counted as the next day's, so local time never runs backwards).
         assertEquals(12_000, LocalTime.localTicks(6_000, Math.PI / 2, DAY));
-        assertEquals(0, LocalTime.localTicks(6_000, -Math.PI / 2, DAY));
+        assertEquals(24_000, LocalTime.localTicks(6_000, -Math.PI / 2, DAY));
         // Half a turn away it is midnight.
         assertEquals(18_000, LocalTime.localTicks(6_000, Math.PI, DAY));
         assertEquals(18_000, LocalTime.localTicks(6_000, -Math.PI, DAY));
     }
 
     @Test
-    void itIsNeverNegative() {
-        assertEquals(DAY - 6_000, LocalTime.localTicks(0, -Math.PI / 2, DAY));
+    void itNeverRunsBackwards() {
+        long previous = LocalTime.localTicks(0, -Math.PI / 2, DAY);
+        assertEquals(18_000, previous);
+        for (long clock : new long[] {5_999, 6_000, 6_001}) {
+            long next = LocalTime.localTicks(clock, -Math.PI / 2, DAY);
+            assertTrue(next > previous, clock + ": " + next + " after " + previous);
+            previous = next;
+        }
+    }
+
+    @Test
+    void aMoonDayStraddlesWorldDays() {
+        int moonDay = Planets.MOON.dayTicks();
+        assertEquals(23_999, LocalTime.localTicks(8L * DAY - 8, 0.0, moonDay));
+        assertEquals(24_001, LocalTime.localTicks(8L * DAY + 8, 0.0, moonDay));
+    }
+
+    @Test
+    void theDateLineIsOnePlace() {
+        for (long clock : new long[] {0, 6_000, 123_456}) {
+            assertEquals(LocalTime.localTicks(clock, Math.PI, DAY), LocalTime.localTicks(clock, -Math.PI, DAY));
+        }
     }
 
     @Test

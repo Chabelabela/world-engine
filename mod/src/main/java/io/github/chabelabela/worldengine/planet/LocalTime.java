@@ -18,14 +18,15 @@ public final class LocalTime {
 
     /**
      * The local time, in day ticks counted like the world clock, at {@code longitude} (radians east of the reference
-     * meridian) on a planet whose day lasts {@code dayTicks}, when the world clock reads {@code clockTicks}. Never
-     * negative: before the first local sunrise it counts from the end of the first day instead.
+     * meridian) on a planet whose day lasts {@code dayTicks}, when the world clock reads {@code clockTicks}. Places
+     * west of the reference meridian count one day ahead, so local time never runs backwards or below zero, and
+     * longitudes -π and π give the same time.
      */
     public static long localTicks(long clockTicks, double longitude, int dayTicks) {
         long scaled = Math.floorDiv(clockTicks, dayTicks) * MINECRAFT_DAY
                 + Math.floorMod(clockTicks, dayTicks) * (long) MINECRAFT_DAY / dayTicks;
-        long local = scaled + Math.round(longitude / (2 * Math.PI) * MINECRAFT_DAY);
-        return local < 0 ? Math.floorMod(local, MINECRAFT_DAY) : local;
+        long offset = Math.floorMod(Math.round(longitude / (2 * Math.PI) * MINECRAFT_DAY), (long) MINECRAFT_DAY);
+        return scaled + offset;
     }
 
     /** {@code ticks} as a 24-hour clock time, "HH:MM": day tick 0 is 06:00. */

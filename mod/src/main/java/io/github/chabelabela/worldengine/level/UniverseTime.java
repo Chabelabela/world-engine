@@ -27,6 +27,8 @@ import net.minecraft.world.timeline.Timeline;
  * layer that changes nothing, so Minecraft samples it per position. While a value is sampled at a position (through
  * {@code EnvironmentAttributeValueSamplerMixin}) the clocks read that position's local time; values asked for
  * without a position, such as the level's overall sky darkness, keep the world clock: the reference meridian's time.
+ * That includes the level's overall sky darkness ({@code Level.updateSkyBrightness}), which monster spawning's light
+ * check, beds and {@code isBrightOutside} use, so those follow the reference meridian (see the plan's Known limits).
  */
 public final class UniverseTime {
     /** The universe level's dimension type (data/worldengine/dimension_type/universe.json). */
@@ -43,10 +45,14 @@ public final class UniverseTime {
         return level.dimensionTypeRegistration().is(UNIVERSE);
     }
 
-    /** Runs {@code body} as sampling environment attributes at {@code position}. */
+    /** Runs {@code body} as sampling environment attributes at {@code position}, or, if null, without a position. */
     public static <T> T sampledAt(Vec3 position, Supplier<T> body) {
         Vec3 outer = SAMPLED.get();
-        SAMPLED.set(position);
+        if (position == null) {
+            SAMPLED.remove();
+        } else {
+            SAMPLED.set(position);
+        }
         try {
             return body.get();
         } finally {

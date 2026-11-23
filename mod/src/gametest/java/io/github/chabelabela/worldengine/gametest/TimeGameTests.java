@@ -49,7 +49,10 @@ public class TimeGameTests {
     @GameTest
     public void withoutAPlaceItIsTheWorldClock(GameTestHelper helper) {
         EnvironmentAttributeSystem day = dayAt(helper, NOON);
+        // A positional sample first must not leave a local value in the cache for the position-free one.
+        checkAngle(helper, sunAngle(day, centre(Planets.HOME, PlanetFace.E3)), 180, "midnight on E3");
         checkAngle(helper, day.getDimensionValue(EnvironmentAttributes.SUN_ANGLE), 0, "the level's own value");
+        checkAngle(helper, sunAngle(day, centre(Planets.HOME, PlanetFace.E1)), 0, "noon on E1");
         checkAngle(helper, sunAngle(day, new Vec3(70_000, 100, 0)), 0, "empty space");
         helper.succeed();
     }
