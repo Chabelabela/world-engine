@@ -33,6 +33,7 @@ class NativeLocalSkyTest {
     void eastIsAhead() {
         assertEquals(Math.PI / 2, core.localSky(N, 2, N / 2.0, N / 2.0).longitude(), 1e-12);
         assertEquals(-Math.PI / 2, core.localSky(N, 0, N / 2.0, N / 2.0).longitude(), 1e-12);
+        assertEquals(Math.PI, core.localSky(N, 3, N / 2.0, N / 2.0).longitude(), 1e-12);
     }
 
     @Test
@@ -48,5 +49,7 @@ class NativeLocalSkyTest {
         assertThrows(NativeCoreException.class, () -> core.localSky(N, 6, 1.0, 1.0));
         assertThrows(NativeCoreException.class, () -> core.localSky(N - 1, 0, 1.0, 1.0));
         assertThrows(NativeCoreException.class, () -> core.localSky(N, 0, Double.NaN, 1.0));
+        assertThrows(NativeCoreException.class, () -> core.localSky(N, -1, 1.0, 1.0));
+        assertThrows(NativeCoreException.class, () -> core.localSky(-N, 0, 1.0, 1.0));
     }
 }

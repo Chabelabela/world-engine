@@ -28,7 +28,8 @@ pub struct LocalSky {
 
 impl CubeSphere {
     /// The sky over grid position (`x`, `z`) of `face`. Any finite position
-    /// works; beyond the face's edges the grid's own frame is extended.
+    /// gives a rotation. Just beyond the face's edges (an overlap band's width)
+    /// the grid's own frame carries on; far beyond them the result means nothing.
     pub fn local_sky(self, face: Face, x: f64, z: f64) -> LocalSky {
         let [grid_x, up, grid_z] = self.grid_frame(face, x, z);
         // Geographic axes: north points along the surface toward the spin
@@ -48,7 +49,9 @@ impl CubeSphere {
         let geographic = DMat3::from_cols(east, up, south);
         let grid = DMat3::from_cols(grid_x, up, grid_z).transpose();
         LocalSky {
-            longitude: libm::atan2(-up.x, -up.z),
+            // 0.0 - v turns -0.0 into +0.0, so the range is (-π, π]: +π at E3's
+            // centre, 0 at the poles.
+            longitude: libm::atan2(0.0 - up.x, 0.0 - up.z),
             latitude,
             tilt: grid * geographic * lift,
         }
@@ -91,6 +94,12 @@ mod tests {
                     points.push((face, x, z));
                 }
             }
+            // Mid-edge points just beyond the face (not corners: the 15° bound
+            // of the grid frame holds only near the face).
+            points.push((face, -10.5, n / 2.0));
+            points.push((face, n + 10.5, n / 2.0));
+            points.push((face, n / 2.0, -10.5));
+            points.push((face, n / 2.0, n + 10.5));
         }
         points
     }
@@ -111,8 +120,11 @@ mod tests {
     fn longitude_grows_east_around_the_equator() {
         let half = f64::from(N) / 2.0;
         assert!((sky(Face::E2, half, half).longitude - FRAC_PI_2).abs() < 1e-12);
-        assert!((sky(Face::E3, half, half).longitude.abs() - PI).abs() < 1e-12);
+        assert!((sky(Face::E3, half, half).longitude - PI).abs() < 1e-12);
         assert!((sky(Face::E0, half, half).longitude + FRAC_PI_2).abs() < 1e-12);
+        // The poles have longitude exactly 0.
+        assert_eq!(sky(Face::North, half, half).longitude, 0.0);
+        assert_eq!(sky(Face::South, half, half).longitude, 0.0);
         // Every equatorial face centre has its grid aligned with east and south.
         for face in [Face::E0, Face::E2, Face::E3] {
             let s = sky(face, half, half);
@@ -132,6 +144,22 @@ mod tests {
         let s = sky(Face::South, half, half);
         assert!((s.latitude + FRAC_PI_2).abs() < 1e-12);
         assert_close(s.tilt * DVec3::Z, DVec3::Y, "south pole");
+    }
+
+    #[test]
+    fn the_pole_stands_at_the_latitude() {
+        for (face, x, z) in samples() {
+            let s = sky(face, x, z);
+            let height = (s.tilt * DVec3::NEG_Z).y;
+            assert!(
+                (height - s.latitude.sin()).abs() < 1e-9,
+                "{face:?} {x} {z}: {height} vs {}",
+                s.latitude.sin()
+            );
+        }
+        let n = f64::from(N);
+        let s = sky(Face::North, n / 2.0, n - 0.5);
+        assert!((s.latitude - PI / 4.0).abs() < 0.01, "{}", s.latitude);
     }
 
     #[test]
