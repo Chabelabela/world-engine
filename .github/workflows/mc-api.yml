@@ -29,10 +29,14 @@ jobs:
           cargo test --workspace --locked
       - name: Virtual display and software rendering, for the client GameTest
         run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri mesa-vulkan-drivers
-      - name: Build, unit-test and GameTest the draft, client included
+      - name: Build, unit-test and GameTest the draft (server)
         working-directory: mod
-        timeout-minutes: 25
-        run: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew build runClientGameTest --continue --stacktrace
+        timeout-minutes: 12
+        run: ./gradlew build --continue --stacktrace
+      - name: Client GameTest
+        working-directory: mod
+        timeout-minutes: 8
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClientGameTest --stacktrace
       - name: Client GameTest screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,9 +44,9 @@ jobs:
           name: client-screenshots
           path: mod/build/run/clientGameTest/screenshots/
           if-no-files-found: warn
-      - name: Test reports and client log on failure
-        if: failure()
+      - name: Test reports and client log
+        if: always()
         working-directory: mod
         run: |
           find build/test-results -name '*.xml' -exec grep -l '<failure' {} \; | while read -r f; do echo "::group::$f"; grep -A15 '<failure' "$f" | head -60; echo "::endgroup::"; done
-          find . -name 'latest.log' -path '*clientGameTest*' -exec tail -80 {} \;
+          find . -name 'latest.log' -exec sh -c 'echo "::group::$1"; tail -120 "$1"; echo "::endgroup::"' _ {} \;
