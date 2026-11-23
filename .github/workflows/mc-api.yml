@@ -1,0 +1,108 @@
+# Planning aid for M1f: prints the real Minecraft 26.3 API around time of day, sky and lighting, and builds draft
+# code in tools/api-probe/ against the mod's real classpath. Not part of the build; deleted once the plan is written.
+name: mc-api
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/mc-api.yml'
+      - 'tools/api-probe/**'
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Resolve the compile classpath
+        working-directory: mod
+        run: |
+          cat > /tmp/cp.gradle <<'EOF'
+          allprojects {
+            tasks.register('printCompileClasspath') {
+              def cp = project.sourceSets.main.compileClasspath
+              doLast { println "CLASSPATH=" + cp.asPath }
+            }
+          }
+          EOF
+          ./gradlew --quiet compileJava -x cargoBuild -x stageHostNative || true
+          ./gradlew --quiet --init-script /tmp/cp.gradle printCompileClasspath | grep '^CLASSPATH=' | sed 's/^CLASSPATH=//' > /tmp/cp.txt
+          tr ':' '\n' < /tmp/cp.txt | sed 's#.*/##' | grep -i -E 'minecraft|gametest|fabric-api-base|loader' | sort
+
+      - name: Find the Minecraft jars
+        run: |
+          : > /tmp/mcjars.txt
+          for jar in $(tr ':' '\n' < /tmp/cp.txt); do
+            if [ -f "$jar" ] && unzip -l "$jar" 2>/dev/null | grep -q 'net/minecraft/world/level/Level.class\|net/minecraft/client/Minecraft.class'; then
+              echo "$jar" >> /tmp/mcjars.txt
+            fi
+          done
+          cat /tmp/mcjars.txt
+          tr '\n' ':' < /tmp/mcjars.txt > /tmp/mccp.txt
+
+      - name: Class names (time, sky, light, attributes)
+        run: |
+          for jar in $(cat /tmp/mcjars.txt); do unzip -Z1 "$jar"; done | grep '^net/minecraft/.*\.class$' | sed 's/\.class$//' | sort -u > /tmp/classes.txt
+          wc -l /tmp/classes.txt
+          grep -i -E 'clock|timeline|attribute|sky|celestial|sun|moon|daytime|lighttexture|lightmap|dimensiontype|weather|starfield|timeofday|gametime' /tmp/classes.txt | grep -v -i 'entity/ai/attributes\|ai/attributes' | head -400
+
+      - name: Data files (timelines, clocks, dimension types)
+        run: |
+          for jar in $(cat /tmp/mcjars.txt); do unzip -Z1 "$jar"; done | grep -E '^data/minecraft/(timeline|world_clock|clock|dimension_type|environment)' | sort -u | tee /tmp/data.txt
+          for f in $(grep -E '\.json$' /tmp/data.txt | grep -E 'timeline|clock|dimension_type/overworld' | head -20); do
+            for jar in $(cat /tmp/mcjars.txt); do
+              if unzip -Z1 "$jar" | grep -qx "$f"; then echo "::group::$f"; unzip -p "$jar" "$f"; echo; echo "::endgroup::"; fi
+            done
+          done
+
+      - name: Signatures of the attribute, timeline and clock packages
+        run: |
+          CP=$(cat /tmp/mccp.txt)
+          for c in $(grep -E '^net/minecraft/world/(attribute|timeline|clock)/' /tmp/classes.txt | grep -v '\$[0-9]' | head -150); do
+            echo "::group::${c//\//.}"
+            javap -p -cp "$CP" "${c//\//.}" 2>&1 | head -120
+            echo "::endgroup::"
+          done
+
+      - name: Sky, light and camera signatures
+        run: |
+          CP=$(cat /tmp/mccp.txt)
+          for c in $(grep -E '/(SkyRenderer|LightTexture|Lightmap[A-Za-z]*|EnvironmentAttributeProbe|DimensionSpecialEffects[A-Za-z$]*|CloudRenderer|WeatherEffectRenderer)$' /tmp/classes.txt); do
+            echo "::group::${c//\//.}"
+            javap -p -cp "$CP" "${c//\//.}" 2>&1 | head -150
+            echo "::endgroup::"
+          done
+
+      - name: Time, sky and light members of the big classes
+        run: |
+          CP=$(cat /tmp/mccp.txt)
+          for c in \
+            net.minecraft.world.level.Level \
+            net.minecraft.server.level.ServerLevel \
+            net.minecraft.client.multiplayer.ClientLevel \
+            net.minecraft.client.renderer.LevelRenderer \
+            net.minecraft.client.renderer.GameRenderer \
+            net.minecraft.client.Camera \
+            net.minecraft.server.MinecraftServer \
+            net.minecraft.world.level.dimension.DimensionType \
+            net.minecraft.world.level.storage.LevelData \
+            net.minecraft.world.level.storage.ServerLevelData \
+            net.minecraft.world.level.storage.WritableLevelData \
+            net.minecraft.world.level.LevelReader \
+            net.minecraft.world.level.BlockAndTintGetter \
+            net.minecraft.world.level.levelgen.WorldOptions \
+            net.minecraft.world.entity.monster.Monster \
+            net.minecraft.world.level.NaturalSpawner \
+            net.minecraft.world.level.block.DaylightDetectorBlock \
+            net.minecraft.world.level.block.BedBlock \
+            net.minecraft.server.commands.TimeCommand \
+            ; do
+            echo "::group::$c"
+            javap -p -cp "$CP" "$c" 2>&1 | grep -i -E 'class |interface |record |time|sky|sun|moon|day|clock|attribut|celestial|darken|bright|light|night|timeline' | head -80
+            echo "::endgroup::"
+          done
