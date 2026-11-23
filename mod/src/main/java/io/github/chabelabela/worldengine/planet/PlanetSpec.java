@@ -4,14 +4,17 @@ import io.github.chabelabela.worldengine.nativebridge.PlanetKind;
 import java.util.Objects;
 
 /**
- * Everything world generation needs to know about one planet: its name (as in {@code we-orbit}), how its
- * terrain seed derives from the world seed, its kind, and where its faces sit in the level.
+ * Everything the mod needs to know about one planet: its name (as in {@code we-orbit}), how its terrain seed
+ * derives from the world seed, its kind, where its faces sit in the level, and how many ticks one of its days lasts.
  */
-public record PlanetSpec(String name, long seedSalt, PlanetKind kind, PlanetLayout layout) {
+public record PlanetSpec(String name, long seedSalt, PlanetKind kind, PlanetLayout layout, int dayTicks) {
     public PlanetSpec {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(layout, "layout");
+        if (dayTicks <= 0) {
+            throw new IllegalArgumentException("dayTicks must be positive: " + dayTicks);
+        }
     }
 
     /** Blocks per face edge. */

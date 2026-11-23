@@ -8,12 +8,15 @@ import java.util.List;
  * The home planet's face E1 is centred on the level's origin.
  */
 public final class Planets {
-    /** ROADMAP §4.4: 16,384 blocks per face edge, radius 10,430 m. */
-    public static final PlanetSpec HOME = new PlanetSpec(
-            "home", 0x9E3779B97F4A7C15L, PlanetKind.TERRESTRIAL, new PlanetLayout(-24_576, -8_192, 16_384));
-    /** 4,096 blocks per face edge, radius 2,608 m. */
-    public static final PlanetSpec MOON = new PlanetSpec(
-            "moon", 0xD1B54A32D192ED03L, PlanetKind.BARREN, new PlanetLayout(100_000, -2_048, 4_096));
+    /** ROADMAP §4.4: 16,384 blocks per face edge, radius 10,430 m. A day is Minecraft's: 20 minutes. */
+    public static final PlanetSpec HOME = new PlanetSpec("home", 0x9E3779B97F4A7C15L, PlanetKind.TERRESTRIAL,
+            new PlanetLayout(-24_576, -8_192, 16_384), LocalTime.MINECRAFT_DAY);
+    /**
+     * 4,096 blocks per face edge, radius 2,608 m. It turns once per orbit, as tidally locked moons do; a lunar month
+     * is Minecraft's eight days, so a day on the moon lasts 160 minutes.
+     */
+    public static final PlanetSpec MOON = new PlanetSpec("moon", 0xD1B54A32D192ED03L, PlanetKind.BARREN,
+            new PlanetLayout(100_000, -2_048, 4_096), 8 * LocalTime.MINECRAFT_DAY);
     public static final List<PlanetSpec> ALL = List.of(HOME, MOON);
 
     private Planets() {
