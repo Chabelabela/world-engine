@@ -23,6 +23,12 @@ fn java_call_sequence() {
         WE_OK
     );
     assert_eq!(crossed[0], 0.0, "E3's east edge wraps onto E0");
+    let mut sky = [0.0f64; 11];
+    assert_eq!(
+        unsafe { we_local_sky(16_384, 1, 8_192.0, 8_192.0, sky.as_mut_ptr()) },
+        WE_OK
+    );
+    assert_eq!(sky[0], 0.0, "spawn is longitude 0");
     let universe = we_universe_new_demo();
     assert!(!universe.is_null());
     unsafe {

@@ -6,7 +6,7 @@
 //! - Return `i32` status codes: `WE_OK`, a negative `WE_ERR_*`, or a documented
 //!   positive outcome such as `WE_SEAM_NOT_FOLDABLE`.
 //!
-//! `we_terrain_columns` and `we_seam_cross` take no handle and keep no state:
+//! `we_terrain_columns`, `we_seam_cross` and `we_local_sky` take no handle and keep no state:
 //! any number of threads may call them at once.
 //!
 //! Threading and lifetime: a `WeUniverse` is **not** thread-safe. All calls on
@@ -20,15 +20,17 @@
 //! into the JVM.
 
 mod seams;
+mod sky;
 mod terrain;
 
 pub use seams::{WE_SEAM_NOT_FOLDABLE, we_seam_cross};
+pub use sky::we_local_sky;
 pub use terrain::{we_terrain_columns, we_terrain_version};
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use we_orbit::{BodyId, CelestialSystem};
 
-pub const WE_ABI_VERSION: u32 = 4;
+pub const WE_ABI_VERSION: u32 = 5;
 pub const WE_OK: i32 = 0;
 pub const WE_ERR_NULL: i32 = -1;
 pub const WE_ERR_BAD_INDEX: i32 = -2;
@@ -182,7 +184,7 @@ mod tests {
 
     #[test]
     fn reports_abi_version() {
-        assert_eq!(we_abi_version(), 4);
+        assert_eq!(we_abi_version(), 5);
     }
 
     #[test]

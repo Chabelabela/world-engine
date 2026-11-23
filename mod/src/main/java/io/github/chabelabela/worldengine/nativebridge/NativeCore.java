@@ -15,6 +15,7 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -23,7 +24,7 @@ import java.util.Objects;
  * {@link #EXPECTED_ABI_VERSION} together with {@code WE_ABI_VERSION}.
  */
 public final class NativeCore {
-    public static final int EXPECTED_ABI_VERSION = 4;
+    public static final int EXPECTED_ABI_VERSION = 5;
 
     /** Largest region {@link #terrainColumns} accepts, in columns. */
     public static final int MAX_COLUMNS = 1 << 20; // keep equal to we_planet::MAX_COLUMNS
@@ -40,6 +41,7 @@ public final class NativeCore {
     private final MethodHandle terrainColumnsFn;
     private final MethodHandle terrainVersionFn;
     private final MethodHandle seamCrossFn;
+    private final MethodHandle localSkyFn;
 
     private NativeCore(SymbolLookup lib) {
         Linker linker = Linker.nativeLinker();
@@ -64,6 +66,9 @@ public final class NativeCore {
                 find(lib, "we_seam_cross"),
                 FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE, JAVA_DOUBLE,
                         JAVA_FLOAT, ADDRESS));
+        localSkyFn = linker.downcallHandle(
+                find(lib, "we_local_sky"),
+                FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT, JAVA_DOUBLE, JAVA_DOUBLE, ADDRESS));
     }
 
     /** Load the library at {@code library} for the lifetime of the JVM and check its ABI version. */
@@ -178,6 +183,23 @@ public final class NativeCore {
             check(status, "we_seam_cross");
             double[] r = out.toArray(JAVA_DOUBLE);
             return new SeamCrossing((int) r[0], r[1], r[2], (int) r[3], r[4], r[5], (float) r[6]);
+        } catch (Throwable t) {
+            throw wrap(t);
+        }
+    }
+
+    /**
+     * The sky over grid point ({@code x}, {@code z}) of {@code face} (0-5) on a planet with {@code cells} blocks per
+     * face edge: its longitude and latitude, and the tilt that turns Minecraft's equatorial sky into the sky there.
+     *
+     * <p>Stateless and thread-safe, like {@link #terrainColumns}.
+     */
+    public LocalSky localSky(int cells, int face, double x, double z) {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment out = arena.allocate(JAVA_DOUBLE, 11);
+            check((int) localSkyFn.invokeExact(cells, face, x, z, out), "we_local_sky");
+            double[] r = out.toArray(JAVA_DOUBLE);
+            return new LocalSky(r[0], r[1], Arrays.copyOfRange(r, 2, 11));
         } catch (Throwable t) {
             throw wrap(t);
         }
