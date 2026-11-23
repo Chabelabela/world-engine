@@ -1,5 +1,5 @@
-# Planning aid for M1f: prints the real Minecraft 26.3 API around time of day, sky and lighting, and builds draft
-# code in tools/api-probe/ against the mod's real classpath. Not part of the build; deleted once the plan is written.
+# Planning aid for M1f: builds and GameTests draft code from tools/api-probe/overlay/ (copied over the checkout in
+# CI only) against the real Minecraft classpath. Not part of the build; deleted once the plan is written.
 name: mc-api
 
 on:
@@ -10,7 +10,7 @@ on:
       - 'tools/api-probe/**'
 
 jobs:
-  discover:
+  probe:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,176 +18,28 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-
-      - name: Resolve the compile classpath
+      - name: Apply the draft overlay
+        run: cp -rv tools/api-probe/overlay/. . | sed 's#^.*overlay/##'
+      - name: Rust checks
+        working-directory: core
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+      - name: Build, unit-test and GameTest the draft
+        working-directory: mod
+        timeout-minutes: 25
+        run: ./gradlew build --continue --stacktrace
+      - name: Test reports on failure
+        if: failure()
         working-directory: mod
         run: |
-          cat > /tmp/cp.gradle <<'EOF'
-          allprojects {
-            tasks.register('printCompileClasspath') {
-              def cp = project.sourceSets.main.compileClasspath
-              doLast { println "CLASSPATH=" + cp.asPath }
-            }
-          }
-          EOF
-          ./gradlew --quiet compileJava -x cargoBuild -x stageHostNative || true
-          ./gradlew --quiet --init-script /tmp/cp.gradle printCompileClasspath | grep '^CLASSPATH=' | sed 's/^CLASSPATH=//' > /tmp/cp.txt
-          tr ':' '\n' < /tmp/cp.txt | sed 's#.*/##' | grep -i -E 'minecraft|gametest|fabric-api-base|loader' | sort
-
-      - name: Find the Minecraft jars
-        run: |
-          : > /tmp/mcjars.txt
-          for jar in $(tr ':' '\n' < /tmp/cp.txt); do
-            if [ -f "$jar" ] && unzip -l "$jar" 2>/dev/null | grep -q 'net/minecraft/world/level/Level.class\|net/minecraft/client/Minecraft.class'; then
-              echo "$jar" >> /tmp/mcjars.txt
-            fi
-          done
-          cat /tmp/mcjars.txt
-          tr '\n' ':' < /tmp/mcjars.txt > /tmp/mccp.txt
-
-      - name: Class names (time, sky, light, attributes)
-        run: |
-          for jar in $(cat /tmp/mcjars.txt); do unzip -Z1 "$jar"; done | grep '^net/minecraft/.*\.class$' | sed 's/\.class$//' | sort -u > /tmp/classes.txt
-          wc -l /tmp/classes.txt
-          grep -i -E 'clock|timeline|attribute|sky|celestial|sun|moon|daytime|lighttexture|lightmap|dimensiontype|weather|starfield|timeofday|gametime' /tmp/classes.txt | grep -v -i 'entity/ai/attributes\|ai/attributes' | head -400
-
-      - name: Data files (timelines, clocks, dimension types)
-        run: |
-          for jar in $(cat /tmp/mcjars.txt); do unzip -Z1 "$jar"; done | grep -E '^data/minecraft/(timeline|world_clock|clock|dimension_type|environment)' | sort -u | tee /tmp/data.txt
-          for f in $(grep -E '\.json$' /tmp/data.txt | grep -E 'timeline|clock|dimension_type/overworld' | head -20); do
-            for jar in $(cat /tmp/mcjars.txt); do
-              if unzip -Z1 "$jar" | grep -qx "$f"; then echo "::group::$f"; unzip -p "$jar" "$f"; echo; echo "::endgroup::"; fi
-            done
-          done
-
-      - name: Signatures of the attribute, timeline and clock packages
-        run: |
-          CP=$(cat /tmp/mccp.txt)
-          for c in $(grep -E '^net/minecraft/world/(attribute|timeline|clock)/' /tmp/classes.txt | grep -v '\$[0-9]' | head -150); do
-            echo "::group::${c//\//.}"
-            javap -p -cp "$CP" "${c//\//.}" 2>&1 | head -120
-            echo "::endgroup::"
-          done
-
-      - name: Sky, light and camera signatures
-        run: |
-          CP=$(cat /tmp/mccp.txt)
-          for c in $(grep -E '/(SkyRenderer|LightTexture|Lightmap[A-Za-z]*|EnvironmentAttributeProbe|DimensionSpecialEffects[A-Za-z$]*|CloudRenderer|WeatherEffectRenderer)$' /tmp/classes.txt); do
-            echo "::group::${c//\//.}"
-            javap -p -cp "$CP" "${c//\//.}" 2>&1 | head -150
-            echo "::endgroup::"
-          done
-
-      - name: Time, sky and light members of the big classes
-        run: |
-          CP=$(cat /tmp/mccp.txt)
-          for c in \
-            net.minecraft.world.level.Level \
-            net.minecraft.server.level.ServerLevel \
-            net.minecraft.client.multiplayer.ClientLevel \
-            net.minecraft.client.renderer.LevelRenderer \
-            net.minecraft.client.renderer.GameRenderer \
-            net.minecraft.client.Camera \
-            net.minecraft.server.MinecraftServer \
-            net.minecraft.world.level.dimension.DimensionType \
-            net.minecraft.world.level.storage.LevelData \
-            net.minecraft.world.level.storage.ServerLevelData \
-            net.minecraft.world.level.storage.WritableLevelData \
-            net.minecraft.world.level.LevelReader \
-            net.minecraft.world.level.BlockAndTintGetter \
-            net.minecraft.world.level.levelgen.WorldOptions \
-            net.minecraft.world.entity.monster.Monster \
-            net.minecraft.world.level.NaturalSpawner \
-            net.minecraft.world.level.block.DaylightDetectorBlock \
-            net.minecraft.world.level.block.BedBlock \
-            net.minecraft.server.commands.TimeCommand \
-            ; do
-            echo "::group::$c"
-            javap -p -cp "$CP" "$c" 2>&1 | grep -i -E 'class |interface |record |time|sky|sun|moon|day|clock|attribut|celestial|darken|bright|light|night|timeline' | head -80
-            echo "::endgroup::"
-          done
-
-  bytecode:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Find the Minecraft jar
+          find build/test-results -name '*.xml' -exec grep -l '<failure' {} \; | while read -r f; do echo "::group::$f"; grep -A15 '<failure' "$f" | head -60; echo "::endgroup::"; done
+      - name: Signatures the draft guesses at, on failure
+        if: failure()
         working-directory: mod
         run: |
-          cat > /tmp/cp.gradle <<'EOF'
-          allprojects {
-            tasks.register('printCompileClasspath') {
-              def cp = project.sourceSets.main.compileClasspath
-              doLast { println "CLASSPATH=" + cp.asPath }
-            }
-          }
-          EOF
-          ./gradlew --quiet --init-script /tmp/cp.gradle printCompileClasspath | grep '^CLASSPATH=' | sed 's/^CLASSPATH=//' > /tmp/cp.txt
-          for jar in $(tr ':' '\n' < /tmp/cp.txt); do
-            if [ -f "$jar" ] && unzip -l "$jar" 2>/dev/null | grep -q 'net/minecraft/client/Minecraft.class'; then echo "$jar" > /tmp/mcjar.txt; fi
-          done
-          cat /tmp/mcjar.txt
-          mkdir -p /tmp/mc && cd /tmp/mc && unzip -q "$(cat /tmp/mcjar.txt)" 'net/*'
-
-      - name: Who reads what (class files naming a member)
-        run: |
-          cd /tmp/mc
-          for s in getDimensionValue getSkyDarken updateSkyBrightness isBrightOutside SKY_LIGHT_LEVEL MONSTERS_BURN SUN_ANGLE STAR_ANGLE MOON_ANGLE SKY_LIGHT_FACTOR BED_RULE getDefaultClockTime getOverworldClockTime environmentAttributes; do
-            echo "::group::$s"
-            grep -rl --include='*.class' "$s" net | sed 's#\.class$##' | sort | head -60
-            echo "::endgroup::"
-          done
-
-      - name: Bytecode of the attribute system, sky and light
-        run: |
-          MC=$(cat /tmp/mcjar.txt)
-          dump() { echo "::group::$1 $2"; javap -c -p -cp "$MC" "$1" | awk -v m="$2" 'BEGIN{p=(m=="")} /^  [a-z].*\(/{p=(m=="" || index($0, m)>0)} p' | head -${3:-400}; echo "::endgroup::"; }
-          dump 'net.minecraft.world.attribute.EnvironmentAttributeSystem$ValueSampler' '' 300
-          dump net.minecraft.world.attribute.EnvironmentAttributeSystem 'addDynamicLayers' 120
-          dump net.minecraft.world.attribute.EnvironmentAttributeSystem 'bakeLayerSampler' 80
-          dump net.minecraft.world.attribute.EnvironmentAttributeSystem 'addDefaultLayers' 40
-          dump 'net.minecraft.world.attribute.EnvironmentAttributeSystem$Builder' '' 200
-          dump net.minecraft.world.timeline.AttributeTrackSampler '' 150
-          dump net.minecraft.world.timeline.Timeline 'createTrackSampler' 60
-          dump net.minecraft.world.timeline.AttributeTrack 'bakeSampler' 60
-          dump net.minecraft.world.attribute.EnvironmentAttributeProbe '' 200
-          dump 'net.minecraft.world.attribute.EnvironmentAttributeProbe$ValueProbe' '' 150
-          dump net.minecraft.world.level.Level 'updateSkyBrightness' 60
-          dump net.minecraft.world.level.Level 'isBrightOutside' 30
-          dump net.minecraft.world.level.Level 'getClockTimeTicks' 40
-          dump net.minecraft.world.level.Level 'getDefaultClockTime' 20
-          dump net.minecraft.client.multiplayer.ClientLevel 'addEnvironmentAttributeLayers' 80
-          dump net.minecraft.client.multiplayer.ClientLevel 'tickTime' 40
-          dump net.minecraft.server.level.ServerLevel 'tickTime' 60
-          dump net.minecraft.server.level.ServerLevel 'canSleepThroughNights' 30
-          dump net.minecraft.server.level.ServerLevel '<init>' 400
-          dump net.minecraft.client.renderer.SkyRenderer 'extractRenderState' 200
-          dump net.minecraft.client.renderer.SkyRenderer 'render(' 200
-          dump net.minecraft.client.renderer.SkyRenderer 'renderSunMoonAndStars' 120
-          dump net.minecraft.client.renderer.SkyRenderer 'applyCelestialBodyTransform' 60
-          dump net.minecraft.client.renderer.SkyRenderer 'renderStars' 60
-          dump net.minecraft.client.renderer.SkyRenderer 'renderSunriseAndSunset' 80
-          dump net.minecraft.client.renderer.LightmapRenderStateExtractor 'extract' 200
-          dump net.minecraft.world.entity.monster.Monster 'isDarkEnoughToSpawn' 80
-          dump net.minecraft.world.level.block.DaylightDetectorBlock 'updateSignalStrength' 80
-          dump net.minecraft.world.level.block.AbstractBedBlock 'useWithoutItem' 120
-          dump net.minecraft.world.attribute.BedRule '' 120
-
-      - name: Signatures of render states, keyframes and modifiers
-        run: |
-          MC=$(cat /tmp/mcjar.txt)
-          for c in net.minecraft.client.renderer.state.level.SkyRenderState net.minecraft.util.KeyframeTrack net.minecraft.util.KeyframeTrackSampler \
-            net.minecraft.world.attribute.EnvironmentAttribute net.minecraft.world.attribute.AttributeType net.minecraft.world.attribute.LerpFunction \
-            net.minecraft.world.attribute.modifier.AttributeModifier net.minecraft.world.attribute.SpatialAttributeInterpolator net.minecraft.client.ClientClockManager \
-            'net.minecraft.client.ClientClockManager$ClientClockInstance' net.minecraft.world.level.CardinalLighting com.mojang.blaze3d.vertex.PoseStack \
-            net.minecraft.core.HolderSet net.minecraft.client.renderer.state.level.CameraRenderState; do
-            echo "::group::$c"; javap -p -cp "$MC" "$c" 2>&1 | grep -v lambda | head -80; echo "::endgroup::"
-          done
-          echo "::group::fabric client gametest classes"
-          for jar in $(tr ':' '\n' < /tmp/cp.txt); do case "$jar" in *client-gametest*) echo "$jar"; unzip -Z1 "$jar" | grep '\.class$' | head -40;; esac; done
-          echo "::endgroup::"
+          MC=$(find .gradle/loom-cache -name 'minecraft-merged-*-26.3.jar' | head -1)
+          javap -p -cp "$MC" net.minecraft.client.Camera | grep -i -E 'pos|Vec3' | head -20
+          javap -p -cp "$MC" net.minecraft.world.level.Level | grep -i -E 'dimension' | head -20
+          javap -p -cp "$MC" net.minecraft.core.registries.Registries | grep -i -E 'timeline|clock' | head -20
