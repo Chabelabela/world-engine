@@ -48,6 +48,12 @@
   - new core tests: the pole stands at the latitude's height everywhere, it is 45° on North's edge with E1, and points just beyond the faces are included;
   - new local-time tests, including a moon day across a world-day boundary and the date line;
   - Javadoc touches.
+- **After the final review** (`858fd8d`, `25ea658`, `3cb2c02`): CI corrected three of the new tests, not the code.
+  - The bad-input test passed −16,384 cells, which the core reads as a valid, huge cube sphere; it passes −1.
+  - The band continuity test sat 300 blocks from a cube corner, where the seam's grid kink makes the face's and band's skies differ by about 25° (a Known limit); at the edge's midpoint they agree to 1e-4.
+  - The sun finder now looks for the whitest pixels relative to the frame, because the sun near the zenith is drawn at grey 240, below the old fixed threshold.
+
+  The final-review fixes also make `LocalSkies` work out a place at its block column's centre, so the answer no longer depends on which point of the column is asked about first. On the small moon that is a tick of its slow day, so the moon GameTest allows 0.1°. CI now runs 25 GameTests and the client GameTest.
 
 **Environment note:** without JDK 25 (as in Claude cloud sessions), skip the `./gradlew` steps and rely on CI (Task 7). Don't download JDKs. The pure planet tests run on any JDK ≥ 21 with the JUnit console launcher.
 
