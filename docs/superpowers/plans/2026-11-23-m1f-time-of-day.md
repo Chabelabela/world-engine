@@ -35,6 +35,20 @@
 - ✅ **The plan reproduces that code:** replaying this plan's steps onto a clean `db66e46` gives the same files, byte for byte, as the tree CI built and tested.
 - ⚠️ **Not checked:** time-driven gameplay in a real world (undead burning, villagers, daylight detectors), and how the sky looks while moving across a seam. See Task 7's manual checks.
 
+**Post-execution note (2026-11-23):** executed with Haiku implementers and Sonnet reviewers. Every task's files matched the CI-verified reference byte for byte, and CI on the executed plan was green, client GameTest included ([run #66](https://github.com/Chabelabela/world-engine/actions/runs/45173700471)). The code reviews then found the problems below, fixed in four follow-up commits (`c15f850`, `6d7be64`, `f4aefc3`, `adee309`). So **the repository, not these code blocks, is authoritative**:
+- **A band's sky is turned into the band's grid.** `LocalSkies` gave a band its twin's tilt, which is in the twin's grid axes. Where a seam turns, the sun and stars therefore stood 90° or 180° round about the vertical against the terrain, and jumped at the band's edge. The twin's tilt is now turned back by the band's quarter turns. A new GameTest, `theSkyCarriesOnAcrossATurnedSeam`, checks the sky is continuous where North meets its band three quarter turns round.
+- **The client GameTest checks the drawn sun.** It used to check only the camera's tilt. Now it also finds the sun's white disc in three screenshots and checks where it is. At 45° north, a sky that wasn't tilted, or was tilted the wrong way, has no sun in view. The test also clears the weather first.
+- **Local time never runs backwards.** Places west of the reference meridian used to wrap to the end of the first day before the world's first sunrise. Now they count one day ahead, so local time is monotonic, and longitudes −π and π give the same time.
+- **A value asked for without a position always reads the world clock**, even if it is asked for in the middle of a positional sample on the same thread, so the level's per-tick cache can't keep a local value.
+- **Smaller fixes:**
+  - the longitude is in (−π, π] as documented: E3's centre was −π, and is now +π;
+  - `LocalSkies` returns no place for a position that isn't finite;
+  - the tilt is worked out at the start of `extractRenderState`;
+  - CI retries `apt-get` and runs the client GameTest even if `build` fails (`--continue`);
+  - new core tests: the pole stands at the latitude's height everywhere, it is 45° on North's edge with E1, and points just beyond the faces are included;
+  - new local-time tests, including a moon day across a world-day boundary and the date line;
+  - Javadoc touches.
+
 **Environment note:** without JDK 25 (as in Claude cloud sessions), skip the `./gradlew` steps and rely on CI (Task 7). Don't download JDKs. The pure planet tests run on any JDK ≥ 21 with the JUnit console launcher.
 
 ---
@@ -1551,6 +1565,8 @@ git push
 
 - **The level's overall sky darkness keeps the reference meridian's time.** Minecraft keeps one sky darkness per level, from the day timeline without a position. Monster spawning's light check, `isBrightOutside` (used by some mob AI: foxes, endermen, drowned, wandering traders), phantoms, beds' "only when dark" rule and sleeping use it. So monsters spawn, and beds work, by the night at spawn's meridian. Making those local means patching each of them; that's for M3, with the real sun.
 - **Sleeping skips to morning at the reference meridian.**
+- **The sky turns back to Minecraft's own in empty space** between the planets, so it jumps when the camera leaves a planet's net (M4 draws the real sky there).
+- **Places west of the reference meridian count one day ahead** (a date line opposite spawn): the time of day is right everywhere, but day-counted timelines (moon phases, the early-game patrol delay) are a day ahead there.
 - **No axial tilt, no seasons, no orbit:** the sun sits in the equatorial plane, fixed among the stars. Days are the same length everywhere and all year (M3).
 - **The moon in the sky is vanilla's**, opposite the sun, not the real moon (M4 draws the real bodies).
 - **Fog's sunrise tint** assumes the sun rises due east in grid terms. On faces turned against the geographic grid it may tint the wrong side.
