@@ -64,6 +64,10 @@ This finishes M1's "terrain never visibly breaks at seams" ([M1 overview](2026-1
     - a landing is on a face and doesn't cross back;
     - something teleported into no-man's land is left alone;
   - `NativeBandTest` also checks each band's yaw turn against the fold.
+- **Found in play (2026-11-24): no structures off the faces** (`a405a5c`).
+  - A band copies its twin's biomes, so vanilla started structures (a bamboo jungle camp) in band chunks. Their pieces were then placed in whatever decorated chunks they reached, so near a cube corner a second camp stood over the 128×128 no-man's land.
+  - Now chunks off every face (empty space, bands, no-man's land) are undecorated too, and `UniverseChunkGenerator.createStructures` starts structures only in decorated chunks.
+  - `decorationStaysClearOfBands` also checks a corner square, a band chunk, empty space and spawn.
 
 **Environment note:** without JDK 25 (as in Claude cloud sessions), skip the `./gradlew` steps and rely on CI (Task 7). Don't download JDKs. The pure planet tests run on any JDK ≥ 21 with the JUnit console launcher.
 
@@ -2214,9 +2218,9 @@ git push
 ## Known limits (by design, for later)
 
 - **Bare bands:** no trees, ores or structures in a band, or within 144 blocks of a seam on the face side (the copied strip plus a ring of one chunk; see the post-execution note), so both copies match. Copying decoration across needs both chunks decorated first; that's a later improvement (M2 or M4).
-- **Structures near seams are cut off.** A structure whose pieces reach into the undecorated zone is missing those pieces, and `/locate` can point at one. Keeping structure starts out of that zone is later work.
+- **Structures near seams are cut off.** Structures start only in decorated chunks (since `a405a5c`), but one that starts near the bare zone is missing the pieces that reach into it. Worlds generated before that fix can also have structures floating over a corner's no-man's land; use a new world.
 - **Put deep into a band:** something teleported (a command, a pearl, a respawn) to a band's middle or beyond crosses on the next tick, with its look turned as for a walker. Something put into a no-man's land square stays there, as it has no last position to go back to.
-- **Block entity contents aren't copied.** A chest in a band and its twin are two chests, so items put in one aren't in the other. Signs, banners and containers near seams behave this way. Breaking one of them also replaces its twin with air, and the twin's own contents may spill there (a manual check, Task 7).
+- **Block entity contents aren't copied.** A chest in a band and its twin are two chests, so items put in one aren't in the other. Signs, banners and containers near seams behave this way. Breaking one of them also replaces its twin with air, and the twin's own contents spill there (confirmed in play), so they are dropped rather than lost. Keeping both containers' contents in sync is later work (M2 or later).
 - **Entities aren't mirrored.** Item frames, armor stands, boats and animals exist on one side only, and animals generated in both copies are separate animals.
 - **An edit near a seam can generate its twin's chunk on the server thread.** The copy needs the twin chunk loaded, so an edit whose twin chunk isn't loaded yet loads or generates it right away, which can make the server hitch. The pre-load only covers the landing point of a player walking out, not the twin of every column a player builds on.
 - **Only players pre-load.** A mob or item that crosses a seam can land in a twin chunk that isn't loaded, and freeze there until a player comes near.
