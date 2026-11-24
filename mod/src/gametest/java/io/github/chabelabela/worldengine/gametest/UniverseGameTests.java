@@ -172,6 +172,17 @@ public class UniverseGameTests {
         check(helper, !PlanetTerrain.isUndecorated(x0 + 144, z), "decorated beyond the ring");
         check(helper, PlanetTerrain.isMirrored(home.faceOriginX(PlanetFace.E3) + n + 32, zE3),
                 "a band chunk is mirrored");
+        // Off the faces nothing is decorated and no structure starts: the no-man's land where E0's north band meets
+        // North's west band (a camp's pieces stood there, started in the band), the band itself, and empty space.
+        int cornerX = home.faceOriginX(PlanetFace.NORTH) - 64;
+        int cornerZ = home.faceOriginZ(PlanetFace.E0) - 64;
+        check(helper, PlanetTerrain.bands().at(cornerX, cornerZ) == null && Planets.at(cornerX, cornerZ) == null,
+                "the corner square is no-man's land");
+        check(helper, PlanetTerrain.isUndecorated(cornerX, cornerZ), "the corner square is undecorated");
+        check(helper, PlanetTerrain.bands().at(cornerX - 128, cornerZ) != null
+                && PlanetTerrain.isUndecorated(cornerX - 128, cornerZ), "E0's north band is undecorated");
+        check(helper, PlanetTerrain.isUndecorated(70_000, 0), "empty space is undecorated");
+        check(helper, !PlanetTerrain.isUndecorated(0, 0), "spawn is decorated");
         helper.succeed();
     }
 

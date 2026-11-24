@@ -19,10 +19,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.NoiseColumn;
@@ -42,6 +45,7 @@ import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
 /**
  * The universe level's generator: planet terrain from the native core where a chunk lies on a planet's
@@ -173,6 +177,22 @@ public final class UniverseChunkGenerator extends ChunkGenerator {
             return;
         }
         super.applyBiomeDecoration(level, chunk, structures);
+    }
+
+    /**
+     * Structures start only in chunks that are decorated ({@link PlanetTerrain#isUndecorated}). A band copies its
+     * twin's biomes, so vanilla would start structures there too, and their pieces would then be placed in whatever
+     * decorated chunks they reach: floating over a corner's no-man's land, or in empty space.
+     */
+    @Override
+    public void createStructures(RegistryAccess registries, ChunkGeneratorStructureState state,
+            StructureManager structures, ChunkAccess chunk, StructureTemplateManager templates,
+            ResourceKey<Level> level) {
+        ChunkPos pos = chunk.getPos();
+        if (PlanetTerrain.isUndecorated(pos.getMinBlockX(), pos.getMinBlockZ())) {
+            return;
+        }
+        super.createStructures(registries, state, structures, chunk, templates, level);
     }
 
     @Override

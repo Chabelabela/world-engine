@@ -177,12 +177,17 @@ public final class PlanetTerrain {
     }
 
     /**
-     * True if vanilla must not decorate the chunk at ({@code minX}, {@code minZ}) (no trees, ores or structures): it
-     * or one of its eight neighbours {@link #isMirrored is mirrored}. A feature may write one chunk beyond its own, so
-     * the ring keeps decoration from spilling into a mirrored chunk, and a band and the face strip it copies match
-     * block for block.
+     * True if vanilla must not decorate the chunk at ({@code minX}, {@code minZ}) (no trees, ores or structures, and no
+     * structure starts either: see {@code UniverseChunkGenerator#createStructures}). That is a chunk off every
+     * planet's faces (empty space, an overlap band, or the no-man's land near a cube corner), and a chunk whose own
+     * column or one of its eight neighbours {@link #isMirrored is mirrored}. A feature may write one chunk beyond its
+     * own, so the ring keeps decoration from spilling into a mirrored chunk, and a band and the face strip it copies
+     * match block for block. Off the faces there is no ground for a structure's pieces to stand on.
      */
     public static boolean isUndecorated(int minX, int minZ) {
+        if (Planets.at(minX, minZ) == null) {
+            return true;
+        }
         for (int dz = -16; dz <= 16; dz += 16) {
             for (int dx = -16; dx <= 16; dx += 16) {
                 if (isMirrored(minX + dx, minZ + dz)) {
