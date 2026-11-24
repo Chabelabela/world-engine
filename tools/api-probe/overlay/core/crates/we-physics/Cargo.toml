@@ -1,0 +1,9 @@
+[package]
+name = "we-physics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Rigid bodies made of blocks for World Engine: ships and the terrain they touch"
+
+[dependencies]
+rapier3d-f64.workspace = true
