@@ -2230,6 +2230,7 @@ git push
 - **Edits in chunks that aren't block-ticking** aren't mirrored, because vanilla doesn't send those to clients either. Edits next to a player always are.
 - **Simultaneous fluid or redstone activity on both sides** is mirrored change by change. Both sides follow the same rules, so they should agree, but this is a manual check (Task 7).
 - **Beyond the band:** void until M4 draws the true neighbour.
+- **Doubles near cube corners.** Around a cube corner the flat level has 360° but the cube has only 270° of ground, so the bands show some ground twice. At a corner next to E1 (such as (−8192, −8192)), a band's twin is the same spot turned 90° about the corner, only about 1.4 times as far from it, so a build, a structure or a coastline there can be seen together with its copy across the no-man's-land square. At the other four corners, the two bands that meet both copy the same corner of a third face. Terrain sinks to deep ocean within a few degrees of every corner to keep this out of the way. Drawing only the copy on the viewer's side of the corner needs client rendering work (M4).
 
 ## Self-review against the M1 goals and ADR 0001
 
