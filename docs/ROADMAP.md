@@ -280,6 +280,9 @@ The sizes below are **rough planning ranges for one experienced developer workin
 
 ### M2 — Physics and ships · *"blocks that fly"*
 **Goal:** Any block structure can become a rigid body with correct mass properties and fly in the surface frame.
+**Plans:**
+- [M2 overview](superpowers/plans/2026-11-24-m2-overview.md): phases M2a–M2e and their order, and the design decisions a Rapier probe measured.
+- [M2a physics core](superpowers/plans/2026-11-24-m2a-physics-core.md): detailed, built and tested in CI first.
 - `we-physics`: Rapier worlds on a worker thread at fixed 60 Hz. Colliders are built from blocks (merged boxes). Mass, center of mass and inertia come from a **block properties table** (datapack JSON with defaults per material, so modpacks can override it).
 - Ship assembly: a *Ship Core* block flood-fills the connected structure, which moves into a shipyard plot. Disassembly is optional.
 - Ship rendering at the simulated transform through Minecraft's GPU API, including block entities. Players can interact with ship blocks, stand and walk on moving ships, and ships collide with terrain (colliders generated from nearby chunks on demand).
@@ -450,4 +453,5 @@ GPU-driven chunk rendering, virtualized geometry, volumetric clouds, dynamic glo
 6. ~~Execute the [M1e-1 seam crossing plan](superpowers/plans/2026-11-22-m1e1-seam-crossing.md).~~ Done; its manual in-game checks (plan Task 6) are open.
 7. ~~Execute the [M1e-2 overlap bands plan](superpowers/plans/2026-11-22-m1e2-overlap-bands.md).~~ Done; its manual in-game checks (plan Task 7) are open.
 8. ~~Plan and execute M1f (per-planet time of day) from ADR 0001.~~ Done; its manual in-game checks (plan Task 7) are open. **M1's code is complete.**
-9. The owner runs M1's manual in-game checks (M0, M1d, M1e-1, M1e-2, M1f), then M2 (physics and ships) is planned.
+9. ~~The owner runs M1's manual in-game checks (M0, M1d, M1e-1, M1e-2, M1f), then M2 (physics and ships) is planned.~~ Done: the checks passed on 2026-11-24, after a fix for structures generated off the faces. M2 is planned in five phases ([overview](superpowers/plans/2026-11-24-m2-overview.md)).
+10. Execute the [M2a physics core plan](superpowers/plans/2026-11-24-m2a-physics-core.md).
